@@ -1119,6 +1119,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             if user_question_detected:
                 debug_logger.info(f"USER QUESTION DETECTED - Pausing autonomous cycle")
                 self.output_queue.put("[INFO]⏸️  Claude ha fatto una domanda. Ciclo autonomo in pausa - aspetto la tua risposta.")
+                self.output_queue.put("[STREAM_END]")  # CRITICAL: Sblocca UI
                 self.is_running = False
                 break
             
@@ -1180,6 +1181,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             if user_question_detected:
                 debug_logger.info(f"USER QUESTION DETECTED - Pausing autonomous cycle")
                 self.output_queue.put("[INFO]⏸️  Claude ha fatto una domanda. Ciclo autonomo in pausa - aspetto la tua risposta.")
+                self.output_queue.put("[STREAM_END]")  # CRITICAL: Sblocca UI
                 self.is_running = False
                 break
             
