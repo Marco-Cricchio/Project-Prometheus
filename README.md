@@ -41,7 +41,10 @@
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    
-   # Option C: Manual dependency installation with virtual environment
+   # Option C: Install directly to current Python (no virtual environment)
+   pip install flask python-dotenv rich google-generativeai
+   
+   # Option D: Manual dependency installation with virtual environment
    python -m venv .venv
    source .venv/bin/activate
    pip install flask python-dotenv rich google-generativeai
@@ -181,6 +184,17 @@ black .
 - Verify your Gemini API key in `.env`
 - Check API quotas at Google AI Studio
 - Prometheus falls back to Claude if Gemini fails
+
+**"Dependencies installed but not found"**
+- This happens when dependencies are in a virtual environment but you're running outside it
+- Solution 1: Activate the virtual environment: `source .venv/bin/activate`
+- Solution 2: Install directly to your current Python: `pip install flask python-dotenv rich google-generativeai`
+- Solution 3: Use the correct Python: `.venv/bin/python test_installation.py` (if .venv exists)
+
+**"Setup.py claims success but test_installation.py fails"**
+- Run `python quick_setup_test.py` to diagnose environment issues
+- The setup may have created a virtual environment but you're not using it
+- Try: `source .venv/bin/activate && python test_installation.py`
 
 ## 📁 Project Structure
 
