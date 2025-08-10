@@ -1609,6 +1609,11 @@
                                         showToast('Ciclo in pausa', 'warning');
                                     }
                                 }
+                            } else if (chunk.includes('[DEBUG]')) {
+                                // Debug temporaneo per diagnosticare problema
+                                const debugText = chunk.replace('[DEBUG]', '').trim();
+                                console.log('🐛 DEBUG:', debugText);
+                                addMessage('System', `🐛 DEBUG: ${debugText}`);
                             } else if (chunk.includes('[CYCLE_COMPLETE]')) {
                                 removeTypingIndicator();
                                 developmentSteps++;
@@ -1658,7 +1663,7 @@
                                         : `Architect automatically changed to: ${architectName}`;
                                     showToast(message, 'warning', 4000);
                                 }
-                            } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
+                            } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|DEBUG|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
                                 // Rimuovi eventuali segnali di controllo dal chunk prima di visualizzare
                                 let cleanChunk = chunk;
                                 

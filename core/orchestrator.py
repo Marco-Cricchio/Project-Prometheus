@@ -797,6 +797,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             return
 
         self.mode = "DEVELOPMENT"
+        self.output_queue.put("[DEBUG]Modalità sviluppo attivata, creando PRP...")
         
         try:
             # Crea il Piano di Progetto (PRP)
@@ -809,7 +810,9 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             )
             
             # FIX: Usa l'architetto selezionato anche per il PRP
+            self.output_queue.put("[DEBUG]Chiamando architetto per generare PRP...")
             prp_response = self._get_architect_response(prp_prompt)
+            self.output_queue.put("[DEBUG]PRP generato correttamente, avviando thread...")
             self.project_plan = prp_response
             
             # MODIFICA: Invia il PRP come un blocco unico per una corretta renderizzazione
