@@ -29,6 +29,28 @@ def main():
     print("-" * 50)
     
     try:
+        # Test debug logging initialization
+        print("🐛 Debug logging attivo: ~/prometheus_debug.log")
+        print("🧪 Testing debug log initialization...")
+        
+        # Import and test orchestrator to force logging creation
+        from core.orchestrator import Orchestrator
+        log_file_path = os.path.expanduser('~/prometheus_debug.log')
+        
+        if os.path.exists(log_file_path):
+            print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
+        else:
+            print("🔄 Creating debug log file...")
+            try:
+                test_orchestrator = Orchestrator(session_id="test_startup", lang='en')
+                print("✅ Orchestrator created successfully - debug log should be active")
+                if os.path.exists(log_file_path):
+                    print(f"✅ Debug log file created with {os.path.getsize(log_file_path)} bytes")
+            except Exception as e:
+                print(f"❌ Error creating test orchestrator: {e}")
+        
+        print("-" * 30)
+        
         from web_app import app
         app.run(debug=False, host='0.0.0.0', port=5050, threaded=True)
     except KeyboardInterrupt:
