@@ -990,11 +990,17 @@
 
             // SEND BUTTON STATE
             function updateSendButtonState(processing) {
+                console.log(`[DEBUG] updateSendButtonState called with processing: ${processing}`);
+                console.log(`[DEBUG] isProcessingRequest before update: ${isProcessingRequest}`);
+                
                 isProcessingRequest = processing;
                 sendBtn.innerHTML = processing ? '⏹' : '➤';
                 sendBtn.title = processing ? 
                     (currentLang === 'it' ? 'Interrompi' : 'Stop') : 
                     (currentLang === 'it' ? 'Invia' : 'Send');
+                    
+                console.log(`[DEBUG] isProcessingRequest after update: ${isProcessingRequest}`);
+                console.log(`[DEBUG] sendBtn.innerHTML after update: ${sendBtn.innerHTML}`);
             }
 
             function setLanguage(lang) {
@@ -1701,24 +1707,33 @@
                         let lastActivity = Date.now();
                         const STREAM_TIMEOUT = 300000; // 5 minuti timeout
                         
+                        console.log('[DEBUG] Starting streaming loop');
+                        
                         while (true) {
                             const { value, done } = await reader.read();
                             chunkCount++;
                             lastActivity = Date.now();
                             
+                            console.log(`[DEBUG] Read chunk ${chunkCount}, done: ${done}, value size: ${value?.length || 0}`);
+                            
                             if (done) {
+                                console.log('[DEBUG] Stream done - breaking from loop');
                                 break;
                             }
                             
                             let chunk = decoder.decode(value, { stream: true });
+                            console.log(`[DEBUG] Decoded chunk: "${chunk.substring(0, 100)}${chunk.length > 100 ? '...' : ''}"`);
                             
                             // NUOVO PARSER ROBUSTO: Separa segnali multipli
                             const signals = parseMultipleSignals(chunk);
+                            console.log(`[DEBUG] Parsed ${signals.length} signals:`, signals.map(s => s.type === 'signal' ? s.signal : 'content'));
                             
                             // Processa ogni segnale individualmente
                             for (const signal of signals) {
                                 const result = await processSignal(signal);
+                                console.log(`[DEBUG] processSignal returned: ${result}`);
                                 if (result === 'END') {
+                                    console.log('[DEBUG] Received END signal - setting shouldEnd = true');
                                     shouldEnd = true;
                                     break;
                                 }
@@ -1726,16 +1741,19 @@
                             
                             // Esci dal ciclo principale se ricevuto STREAM_END
                             if (shouldEnd) {
+                                console.log('[DEBUG] shouldEnd = true - breaking from main loop');
                                 break;
                             }
                             
                             // Timeout safety check
                             if (Date.now() - lastActivity > STREAM_TIMEOUT) {
-                                console.warn('Stream timeout - forcing end');
+                                console.warn('[DEBUG] Stream timeout - forcing end');
                                 showToast('Timeout streaming - terminando richiesta', 'warning');
                                 break;
                             }
                         }
+                        
+                        console.log('[DEBUG] Exited streaming loop, calling finally block');
                         
                         // FUNZIONE PARSER SEGNALI MULTIPLI
                         function parseMultipleSignals(chunk) {
@@ -1789,8 +1807,11 @@
                         
                         // FUNZIONE PROCESSO SEGNALE SINGOLO
                         async function processSignal(signal) {
+                            console.log(`[DEBUG] processSignal called with:`, signal);
+                            
                             if (signal.type === 'content') {
                                 // Contenuto normale - rendering più reattivo
+                                console.log(`[DEBUG] Processing content: "${signal.data.substring(0, 50)}..."`);
                                 removeTypingIndicator(); // Rimuovi indicator quando arriva contenuto
                                 appendToStream(signal.data, true); // Rendering immediato per contenuto
                                 return;
@@ -1798,13 +1819,16 @@
                             
                             // Segnali speciali
                             const { signal: signalType, data } = signal;
+                            console.log(`[DEBUG] Processing signal: ${signalType}, data: "${data?.substring(0, 50)}..."`);
                             
                             switch (signalType) {
                                 case 'KEEPALIVE':
+                                    console.log('[DEBUG] KEEPALIVE signal received');
                                     updateConnectionStatus('connected');
                                     break;
                                     
                                 case 'STREAM_END':
+                                    console.log('[DEBUG] STREAM_END signal received - returning END');
                                     updateConnectionStatus('completed');
                                     return 'END';
                                     
@@ -1926,10 +1950,17 @@
                     addMessage('System', `❌ ${UI_TEXT[currentLang].connectionError}`);
                     showToast('🚨 Errore di connessione - Riprova', 'error');
                 } finally {
+                    console.log('[DEBUG] Finally block executed - resetting UI state');
+                    console.log('[DEBUG] isProcessingRequest before reset:', isProcessingRequest);
+                    
                     currentAbortController = null;
                     updateSendButtonState(false);
                     userInput.disabled = false;
                     userInput.focus();
+                    
+                    console.log('[DEBUG] isProcessingRequest after reset:', isProcessingRequest);
+                    console.log('[DEBUG] Send button innerHTML after reset:', sendBtn.innerHTML);
+                    console.log('[DEBUG] User input disabled after reset:', userInput.disabled);
                     
                     // Nasconde il provider status dopo l'elaborazione
                     setTimeout(() => {
