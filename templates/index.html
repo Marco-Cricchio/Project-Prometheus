@@ -1383,6 +1383,71 @@
                             // [TEMP DEBUG] Log ogni chunk che arriva
                             console.log('[FRONTEND DEBUG] Chunk ricevuto:', chunk);
                             
+                            // Se il chunk contiene segnali multipli, processali separatamente
+                            const processedSignals = new Set();
+                            let remainingChunk = chunk;
+                            
+                            // 1. Processa messaggi di fallback
+                            if (remainingChunk.includes('🔑 Chiave API non configurata')) {
+                                const keyMessage = remainingChunk.match(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\./);
+                                if (keyMessage && !processedSignals.has('fallback-message')) {
+                                    console.log('[FRONTEND DEBUG] Processando messaggio fallback');
+                                    addMessage('System', keyMessage[0]);
+                                    processedSignals.add('fallback-message');
+                                    remainingChunk = remainingChunk.replace(keyMessage[0], '');
+                                }
+                            }
+                            
+                            // 2. Processa segnale cambio architetto
+                            if (remainingChunk.includes('[ARCHITECT_CHANGE]')) {
+                                const architectMatch = remainingChunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
+                                if (architectMatch && !processedSignals.has('architect-change')) {
+                                    const newArchitect = architectMatch[1];
+                                    console.log('[FRONTEND DEBUG] Processando cambio architetto a:', newArchitect);
+                                    
+                                    if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
+                                        architectSelect.value = newArchitect;
+                                        currentArchitect = newArchitect;
+                                        localStorage.setItem('architect', newArchitect);
+                                        updateProviderStatus(newArchitect, true);
+                                        
+                                        const architectName = newArchitect === 'claude' ? 'Claude' : 'Gemini';
+                                        const message = currentLang === 'it' 
+                                            ? `Architetto cambiato automaticamente: ${architectName}`
+                                            : `Architect automatically changed to: ${architectName}`;
+                                        showToast(message, 'warning', 4000);
+                                    }
+                                    
+                                    processedSignals.add('architect-change');
+                                    remainingChunk = remainingChunk.replace(architectMatch[0], '');
+                                }
+                            }
+                            
+                            // 3. Processa messaggio di successo
+                            if (remainingChunk.includes('✅ Passaggio completato')) {
+                                const successMessage = remainingChunk.match(/✅ Passaggio completato.*?con Claude\./);
+                                if (successMessage && !processedSignals.has('success-message')) {
+                                    console.log('[FRONTEND DEBUG] Processando messaggio successo');
+                                    addMessage('System', successMessage[0]);
+                                    processedSignals.add('success-message');
+                                    remainingChunk = remainingChunk.replace(successMessage[0], '');
+                                }
+                            }
+                            
+                            // 4. Il contenuto rimanente è la risposta di Claude
+                            remainingChunk = remainingChunk.trim();
+                            if (remainingChunk && !processedSignals.has('claude-response')) {
+                                console.log('[FRONTEND DEBUG] Processando risposta Claude:', remainingChunk.substring(0, 100));
+                                appendToStream(remainingChunk);
+                                processedSignals.add('claude-response');
+                            }
+                            
+                            // Skip il resto del parsing se abbiamo già processato tutto
+                            if (processedSignals.size > 0) {
+                                console.log('[FRONTEND DEBUG] Chunk processato completamente, saltando parsing normale');
+                                continue;
+                            }
+                            
                             // Rileva se siamo in fase di sviluppo
                             if (chunk.includes('ACCENDI I MOTORI') || chunk.includes('START THE ENGINES') || 
                                 chunk.includes('[CLAUDE_PROMPT]') || chunk.includes('[CLAUDE_WORKING]')) {
