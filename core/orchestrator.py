@@ -775,6 +775,21 @@ class Orchestrator:
         
         if should_start_dev and self.mode == "BRAINSTORMING":
             self.start_development_phase()
+        elif self.mode == "DEVELOPMENT" and not self.is_running:
+            # GESTIONE RISPOSTA UTENTE DURANTE SVILUPPO
+            # Se siamo in modalità sviluppo ma il ciclo è fermo (domanda in attesa), riavvia con feedback
+            self.output_queue.put("[INFO]🔄 Ricevuta risposta utente - riavvio ciclo di sviluppo...")
+            
+            # Reset contatori e riavvia con la risposta dell'utente
+            self.consecutive_completion_signals = 0
+            self.is_running = True
+            
+            # Crea feedback specifico con la risposta dell'utente
+            user_feedback = f"RISPOSTA UTENTE AL CONFLITTO: {user_text}. Procedi di conseguenza seguendo le istruzioni dell'utente."
+            
+            # Riavvia il ciclo di sviluppo in un nuovo thread
+            self.dev_thread = threading.Thread(target=self._development_loop_with_feedback, args=(user_feedback,))
+            self.dev_thread.start()
         else: # Qualsiasi altro input, sia brainstorming che feedback di sviluppo
             # Invece di restituire un generatore, mettiamo il messaggio in una coda di input
             # per essere elaborato dal thread principale (semplificazione per ora)
@@ -1012,6 +1027,58 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         # Se rileva completamento o ripetizione, conta come segnale di fine
         return completion_detected or repetition_detected
 
+    def _detect_user_question(self, claude_response):
+        """Rileva se Claude sta facendo domande all'utente che richiedono risposta."""
+        if not claude_response:
+            return False
+        
+        response_lower = claude_response.lower()
+        
+        # Pattern che indicano domande dirette all'utente
+        question_patterns = [
+            "come vuoi procedere?",
+            "quale preferisci?", 
+            "che cosa scegli?",
+            "come procedere?",
+            "quale opzione",
+            "**opzioni:**",
+            "**opzioni**",
+            "1. **sovrascrivere**",
+            "2. **creare**", 
+            "3. **chiedere**",
+            "vuoi che proceda",
+            "how do you want to proceed",
+            "which option do you prefer",
+            "what would you like",
+            "which do you prefer",
+            "should i proceed",
+            "what should i do"
+        ]
+        
+        # Cerca anche pattern di domande con punti interrogativi in contesti specifici
+        question_context_patterns = [
+            "conflitto.*\\?",
+            "scegli.*\\?", 
+            "preferisci.*\\?",
+            "vuoi.*\\?",
+            "procedere.*\\?",
+            "opzione.*\\?"
+        ]
+        
+        import re
+        
+        # Check direct patterns
+        for pattern in question_patterns:
+            if pattern in response_lower:
+                return True
+        
+        # Check regex patterns
+        for pattern in question_context_patterns:
+            if re.search(pattern, response_lower):
+                return True
+        
+        return False
+
     def _development_loop(self):
         """Il vero motore autonomo che gira in background, con detection del completamento."""
         
@@ -1047,7 +1114,15 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 self.output_queue.put(chunk)
                 step_response += str(chunk)
             
-            # Rileva se il progetto è completato
+            # FIRST: Rileva se Claude sta facendo domande all'utente
+            user_question_detected = self._detect_user_question(step_response)
+            if user_question_detected:
+                debug_logger.info(f"USER QUESTION DETECTED - Pausing autonomous cycle")
+                self.output_queue.put("[INFO]⏸️  Claude ha fatto una domanda. Ciclo autonomo in pausa - aspetto la tua risposta.")
+                self.is_running = False
+                break
+            
+            # SECOND: Rileva se il progetto è completato
             completion_detected = self._detect_project_completion(step_response)
             debug_logger.info(f"Cycle {self.total_cycles}: Completion detection = {completion_detected}")
             debug_logger.info(f"Response snippet for analysis: {step_response[:300]}...")
@@ -1079,6 +1154,66 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         
         self.output_queue.put("[INFO]Ciclo di sviluppo in pausa.")
         # Mettiamo un segnale di fine per chiudere lo stream se necessario
+        self.output_queue.put(None)
+
+    def _development_loop_with_feedback(self, initial_feedback):
+        """Ciclo di sviluppo che inizia con feedback specifico dall'utente."""
+        user_feedback = initial_feedback
+        
+        while self.is_running:
+            self.total_cycles += 1
+            
+            # Failsafe: stop dopo troppi cicli
+            if self.total_cycles > self.max_total_cycles:
+                self.output_queue.put(f"[INFO]🛑 Interrotto automaticamente dopo {self.max_total_cycles} cicli per evitare loop infinito.")
+                self.is_running = False
+                break
+            
+            # Esegui un passo di sviluppo e cattura la risposta
+            step_response = ""
+            for chunk in self.handle_development_step(user_feedback):
+                self.output_queue.put(chunk)
+                step_response += str(chunk)
+            
+            # FIRST: Rileva se Claude sta facendo domande all'utente
+            user_question_detected = self._detect_user_question(step_response)
+            if user_question_detected:
+                debug_logger.info(f"USER QUESTION DETECTED - Pausing autonomous cycle")
+                self.output_queue.put("[INFO]⏸️  Claude ha fatto una domanda. Ciclo autonomo in pausa - aspetto la tua risposta.")
+                self.is_running = False
+                break
+            
+            # SECOND: Rileva se il progetto è completato
+            completion_detected = self._detect_project_completion(step_response)
+            debug_logger.info(f"Cycle {self.total_cycles}: Completion detection = {completion_detected}")
+            debug_logger.info(f"Response snippet for analysis: {step_response[:300]}...")
+            
+            if completion_detected:
+                self.consecutive_completion_signals += 1
+                debug_logger.info(f"Consecutive completion signals: {self.consecutive_completion_signals}/{self.max_consecutive_completions}")
+                self.output_queue.put(f"[INFO]🔍 Rilevato segnale di completamento ({self.consecutive_completion_signals}/{self.max_consecutive_completions})")
+                
+                if self.consecutive_completion_signals >= self.max_consecutive_completions:
+                    debug_logger.info(f"STOPPING LOOP: Reached max consecutive completions")
+                    self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
+                    self.is_running = False
+                    break
+            else:
+                # Reset counter se non rileva completamento
+                if self.consecutive_completion_signals > 0:
+                    debug_logger.info(f"Resetting completion counter from {self.consecutive_completion_signals} to 0")
+                self.consecutive_completion_signals = 0
+            
+            # Resetta il feedback per il prossimo ciclo automatico
+            user_feedback = None 
+            
+            # Se is_running è diventato False durante il passo, esci
+            if not self.is_running:
+                break
+            
+            time.sleep(2) # Piccola pausa per dare respiro al sistema
+        
+        self.output_queue.put("[INFO]Ciclo di sviluppo in pausa.")
         self.output_queue.put(None)
 
     def _development_loop_recovery(self):
