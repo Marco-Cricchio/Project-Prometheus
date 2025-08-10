@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "project-prometheus"
+version = "1.0.0"
+description = "AI-powered autonomous development assistant with TDD cycle"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Project Prometheus Team"},
+]
+keywords = ["ai", "development", "automation", "tdd", "claude", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "flask>=2.3.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "google-generativeai>=0.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
+
+[project.scripts]
+prometheus-web = "web_app:main"
+prometheus-cli = "cli:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/project-prometheus"
+Repository = "https://github.com/your-username/project-prometheus"
+Issues = "https://github.com/your-username/project-prometheus/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core"]
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
