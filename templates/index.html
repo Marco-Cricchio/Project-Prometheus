@@ -1697,9 +1697,15 @@
                         let chunkCount = 0;
                         let isDevelopmentPhase = false;
 
+                        let shouldEnd = false;
+                        let lastActivity = Date.now();
+                        const STREAM_TIMEOUT = 300000; // 5 minuti timeout
+                        
                         while (true) {
                             const { value, done } = await reader.read();
                             chunkCount++;
+                            lastActivity = Date.now();
+                            
                             if (done) {
                                 break;
                             }
@@ -1711,7 +1717,23 @@
                             
                             // Processa ogni segnale individualmente
                             for (const signal of signals) {
-                                await processSignal(signal);
+                                const result = await processSignal(signal);
+                                if (result === 'END') {
+                                    shouldEnd = true;
+                                    break;
+                                }
+                            }
+                            
+                            // Esci dal ciclo principale se ricevuto STREAM_END
+                            if (shouldEnd) {
+                                break;
+                            }
+                            
+                            // Timeout safety check
+                            if (Date.now() - lastActivity > STREAM_TIMEOUT) {
+                                console.warn('Stream timeout - forcing end');
+                                showToast('Timeout streaming - terminando richiesta', 'warning');
+                                break;
                             }
                         }
                         
