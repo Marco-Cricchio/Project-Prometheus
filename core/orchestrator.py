@@ -173,8 +173,10 @@ class StatusEnum:
 
 def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
     """Helper per eseguire Claude con prompt lunghi via stdin"""
+    print(f"DEBUG: _run_claude_with_prompt chiamata - prompt length: {len(prompt_text)}, timeout: {timeout}")
     try:
         command_list = ["claude", "-p", "--dangerously-skip-permissions"]
+        print(f"DEBUG: Eseguendo comando: {' '.join(command_list)}")
         
         result = subprocess.run(
             command_list, 
@@ -187,14 +189,29 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
             encoding='utf-8'
         )
         
-        if result.returncode != 0:
-            return f"Errore: Claude command failed (code {result.returncode}): {result.stderr}"
+        print(f"DEBUG: Claude comando completato - return code: {result.returncode}")
+        if result.stderr:
+            print(f"DEBUG: Claude stderr: {result.stderr}")
         
+        if result.returncode != 0:
+            error_msg = f"Errore: Claude command failed (code {result.returncode}): {result.stderr}"
+            print(f"DEBUG: Claude fallito: {error_msg}")
+            return error_msg
+        
+        print(f"DEBUG: Claude successo - response length: {len(result.stdout)}")
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
-        return f"Errore: Claude command timed out after {timeout} seconds"
+        error_msg = f"Errore: Claude command timed out after {timeout} seconds"
+        print(f"DEBUG: Claude timeout: {error_msg}")
+        return error_msg
+    except FileNotFoundError:
+        error_msg = "Errore: Claude CLI not found. Please install Claude Code CLI."
+        print(f"DEBUG: Claude CLI non trovato: {error_msg}")
+        return error_msg
     except Exception as e:
-        return f"Errore: Unexpected error: {e}"
+        error_msg = f"Errore: Unexpected error: {e}"
+        print(f"DEBUG: Claude errore inaspettato: {error_msg}")
+        return error_msg
 
 # I prompt ora sono multilingua
 PROMPTS = {
@@ -370,27 +387,36 @@ class Orchestrator:
     
     def _attempt_fallback_to_claude(self, error_type, prompt):
         """Tenta il fallback da Gemini a Claude."""
+        print(f"DEBUG: _attempt_fallback_to_claude chiamata con error_type: {error_type}")
+        
         # Notifica l'utente del cambio
         user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
+        print(f"DEBUG: Inviando messaggio utente: {user_message}")
         self.output_queue.put(f"\n{user_message}\n")
         
         # Aggiorna lo stato del fallback
         self.fallback_active = True
         self.current_architect = 'claude'
         self.fallback_reason = error_type
+        print(f"DEBUG: Stato fallback aggiornato - fallback_active: {self.fallback_active}")
         
         # Invia segnale di cambio architetto al frontend
+        print(f"DEBUG: Inviando segnale cambio architetto")
         self.output_queue.put("[ARCHITECT_CHANGE]claude")
         
         try:
+            print(f"DEBUG: Chiamando _run_claude_with_prompt...")
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
+            print(f"DEBUG: Claude ha risposto con: {len(claude_response) if claude_response else 0} caratteri")
             
             # Notifica successo del fallback
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
+            print(f"DEBUG: Inviando messaggio di successo: {success_message}")
             self.output_queue.put(f"{success_message}\n")
             
             return claude_response
         except Exception as claude_error:
+            print(f"DEBUG: Claude ha fallito con errore: {claude_error}")
             # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
             both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
             raise Exception(both_failed_msg)
