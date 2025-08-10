@@ -794,7 +794,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             else:
                 # Claude (sia selezionato che fallback)
                 brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
+                full_response = _run_claude_with_prompt(brainstorm_prompt, self.working_directory, timeout=60)
                 yield full_response
             
             self.conversation_history.append(f"[Prometheus]: {full_response}")
