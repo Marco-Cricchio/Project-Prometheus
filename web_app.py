@@ -85,31 +85,22 @@ def chat():
         return jsonify({"error": "Input o session_id mancante"}), 400
     
     orchestrator = get_orchestrator(session_id, lang, architect_llm)
-    print(f"[TEMP DEBUG] Orchestrator ottenuto per sessione {session_id}")
     
     # Questa chiamata è ora non-bloccante. Elabora l'input e potrebbe
     # avviare il thread di sviluppo in background.
-    print(f"[TEMP DEBUG] Chiamando process_user_input con: {user_input}")
     orchestrator.process_user_input(user_input)
-    print(f"[TEMP DEBUG] process_user_input completato, iniziando streaming")
     
     def stream_from_queue():
         """
         Questo generatore si mette in ascolto sulla coda dell'orchestratore
         e invia i dati al frontend non appena diventano disponibili.
         """
-        print(f"[TEMP DEBUG] stream_from_queue avviato per sessione {session_id}")
-        chunk_count = 0
         while True:
             # .get() è bloccante: aspetta finché non c'è un elemento nella coda
             chunk = orchestrator.output_queue.get()
-            chunk_count += 1
-            print(f"[TEMP DEBUG] Chunk {chunk_count} ricevuto: {chunk[:200] if chunk else 'None'}...")
             if chunk is None: # 'None' è il nostro segnale per terminare lo stream
-                print(f"[TEMP DEBUG] Stream terminato dopo {chunk_count} chunks")
                 break
             yield chunk
-        print(f"[TEMP DEBUG] Generatore completato")
             
     return Response(stream_from_queue(), mimetype='text/plain')
 

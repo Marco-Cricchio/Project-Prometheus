@@ -377,9 +377,6 @@ class Orchestrator:
     
     def _attempt_fallback_to_claude_for_brainstorming(self, error_type, prompt):
         """Versione per brainstorming che manda messaggi separati nella coda."""
-        print(f"[TEMP DEBUG] _attempt_fallback_to_claude_for_brainstorming chiamato con error_type: {error_type}")
-        print(f"[TEMP DEBUG] Prompt length: {len(prompt)}")
-        print(f"[TEMP DEBUG] Current fallback_active: {getattr(self, 'fallback_active', 'Non definito')}")
         
         # Aggiorna lo stato del fallback
         self.fallback_active = True
@@ -389,31 +386,24 @@ class Orchestrator:
         try:
             # Messaggio di notifica del cambio
             user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
-            print(f"[TEMP DEBUG] Inviando user_message nella coda: {user_message[:100]}...")
             self.output_queue.put(f"\n{user_message}\n")
             
             # Segnale di cambio architetto
-            print(f"[TEMP DEBUG] Inviando segnale cambio architetto nella coda")
             self.output_queue.put("[ARCHITECT_CHANGE]claude")
             
-            print(f"[TEMP DEBUG] Chiamando Claude...")
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
-            print(f"[TEMP DEBUG] Claude ha risposto con {len(claude_response) if claude_response else 0} caratteri")
             
             # Invia la risposta di Claude
-            print(f"[TEMP DEBUG] Inviando risposta Claude nella coda")
             self.output_queue.put(claude_response)
             
             # Messaggio di successo
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
-            print(f"[TEMP DEBUG] Inviando success_message nella coda: {success_message[:100]}...")
             self.output_queue.put(f"\n{success_message}\n")
             
             # Non restituire nulla - tutto è stato inviato tramite coda
             return None
             
         except Exception as claude_error:
-            print(f"[TEMP DEBUG] Claude ha fallito: {claude_error}")
             # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
             both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
             self.output_queue.put(f"Errore: {both_failed_msg}")
@@ -698,22 +688,16 @@ class Orchestrator:
 
     def process_user_input(self, user_text):
         """Punto di ingresso che mette in coda le azioni."""
-        print(f"[TEMP DEBUG] process_user_input chiamato con: {user_text}")
         self.conversation_history.append(f"[User]: {user_text}")
         
         if "ACCENDI I MOTORI!" in user_text.upper() and self.mode == "BRAINSTORMING":
-            print(f"[TEMP DEBUG] Avvio fase sviluppo")
             self.start_development_phase()
         else: # Qualsiasi altro input, sia brainstorming che feedback di sviluppo
-            print(f"[TEMP DEBUG] Entrando in handle_brainstorming")
             # Invece di restituire un generatore, mettiamo il messaggio in una coda di input
             # per essere elaborato dal thread principale (semplificazione per ora)
             for chunk in self.handle_brainstorming(user_text):
-                print(f"[TEMP DEBUG] Putting chunk in queue: {chunk[:100] if chunk else 'None'}...")
                 self.output_queue.put(chunk)
-            print(f"[TEMP DEBUG] Mettendo segnale di terminazione (None) in coda")
             self.output_queue.put(None) # Segnale di fine per questo stream
-            print(f"[TEMP DEBUG] process_user_input completato")
 
     def _create_brainstorm_prompt(self, user_text):
         """Crea il prompt standardizzato per il brainstorming."""
@@ -738,8 +722,6 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
 
     def handle_brainstorming(self, user_text):
         """Gestisce il brainstorming e mette l'output nella coda."""
-        print(f"[TEMP DEBUG] handle_brainstorming chiamato con: {user_text}")
-        print(f"[TEMP DEBUG] architect_llm: {self.architect_llm}")
         try:
             full_response = ""
             

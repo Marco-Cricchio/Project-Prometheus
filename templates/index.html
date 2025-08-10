@@ -1336,12 +1336,6 @@
                         }
                     } else {
                         currentAbortController = new AbortController();
-                        console.log('[FRONTEND DEBUG] Invio richiesta a /api/chat con:', {
-                            message: messageText, 
-                            session_id: currentSessionId, 
-                            lang: currentLang,
-                            architect: currentArchitect
-                        });
                         
                         const response = await fetch('/api/chat', {
                             method: 'POST',
@@ -1355,12 +1349,9 @@
                             signal: currentAbortController.signal
                         });
                         
-                        console.log('[FRONTEND DEBUG] Risposta ricevuta:', response.status, response.statusText);
-                        console.log('[FRONTEND DEBUG] Response headers:', [...response.headers.entries()]);
 
                         const reader = response.body.getReader();
                         const decoder = new TextDecoder();
-                        console.log('[FRONTEND DEBUG] Reader inizializzato, iniziando loop di lettura');
                         
                         removeTypingIndicator();
                         currentStreamElement = null;
@@ -1369,19 +1360,13 @@
                         let chunkCount = 0;
 
                         while (true) {
-                            console.log('[FRONTEND DEBUG] Aspettando prossimo chunk...');
                             const { value, done } = await reader.read();
                             chunkCount++;
-                            console.log('[FRONTEND DEBUG] Read completato:', { chunkCount, done, hasValue: !!value });
                             if (done) {
-                                console.log('[FRONTEND DEBUG] Stream terminato dopo', chunkCount, 'chunks');
                                 break;
                             }
                             
                             let chunk = decoder.decode(value, { stream: true });
-                            
-                            // [TEMP DEBUG] Log ogni chunk che arriva
-                            console.log('[FRONTEND DEBUG] Chunk ricevuto:', chunk);
                             
                             // Se il chunk contiene segnali multipli, processali separatamente
                             const processedSignals = new Set();
@@ -1391,7 +1376,6 @@
                             if (remainingChunk.includes('🔑 Chiave API non configurata')) {
                                 const keyMessage = remainingChunk.match(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\./);
                                 if (keyMessage && !processedSignals.has('fallback-message')) {
-                                    console.log('[FRONTEND DEBUG] Processando messaggio fallback');
                                     addMessage('System', keyMessage[0]);
                                     processedSignals.add('fallback-message');
                                     remainingChunk = remainingChunk.replace(keyMessage[0], '');
@@ -1403,7 +1387,6 @@
                                 const architectMatch = remainingChunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
                                 if (architectMatch && !processedSignals.has('architect-change')) {
                                     const newArchitect = architectMatch[1];
-                                    console.log('[FRONTEND DEBUG] Processando cambio architetto a:', newArchitect);
                                     
                                     if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
                                         architectSelect.value = newArchitect;
@@ -1427,7 +1410,6 @@
                             if (remainingChunk.includes('✅ Passaggio completato')) {
                                 const successMessage = remainingChunk.match(/✅ Passaggio completato.*?con Claude\./);
                                 if (successMessage && !processedSignals.has('success-message')) {
-                                    console.log('[FRONTEND DEBUG] Processando messaggio successo');
                                     addMessage('System', successMessage[0]);
                                     processedSignals.add('success-message');
                                     remainingChunk = remainingChunk.replace(successMessage[0], '');
@@ -1437,14 +1419,12 @@
                             // 4. Il contenuto rimanente è la risposta di Claude
                             remainingChunk = remainingChunk.trim();
                             if (remainingChunk && !processedSignals.has('claude-response')) {
-                                console.log('[FRONTEND DEBUG] Processando risposta Claude:', remainingChunk.substring(0, 100));
                                 appendToStream(remainingChunk);
                                 processedSignals.add('claude-response');
                             }
                             
                             // Skip il resto del parsing se abbiamo già processato tutto
                             if (processedSignals.size > 0) {
-                                console.log('[FRONTEND DEBUG] Chunk processato completamente, saltando parsing normale');
                                 continue;
                             }
                             
@@ -1493,7 +1473,6 @@
                             } else if (chunk.includes('[STEP_SUCCESS]')) {
                                 // Skip this signal
                             } else if (chunk.includes('🔑 Chiave API non configurata') || chunk.includes('✅ Passaggio completato')) {
-                                console.log('[FRONTEND DEBUG] Messaggio di fallback rilevato');
                                 // Estrai solo i messaggi di stato
                                 const fallbackMessages = [];
                                 if (chunk.includes('🔑 Chiave API non configurata')) {
@@ -1510,13 +1489,10 @@
                                     addMessage('System', msg);
                                 });
                             } else if (chunk.includes('[ARCHITECT_CHANGE]')) {
-                                console.log('[FRONTEND DEBUG] ARCHITECT_CHANGE rilevato!', chunk);
                                 // Estrae il nome dell'architetto dal segnale usando regex
                                 const architectMatch = chunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
                                 const newArchitect = architectMatch ? architectMatch[1] : '';
-                                console.log('[FRONTEND DEBUG] newArchitect estratto:', newArchitect);
                                 if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
-                                    console.log('[FRONTEND DEBUG] Aggiornamento dropdown a:', newArchitect);
                                     // Aggiorna il dropdown dell'architetto
                                     architectSelect.value = newArchitect;
                                     currentArchitect = newArchitect;
@@ -1531,9 +1507,6 @@
                                         ? `Architetto cambiato automaticamente: ${architectName}`
                                         : `Architect automatically changed to: ${architectName}`;
                                     showToast(message, 'warning', 4000);
-                                    console.log('[FRONTEND DEBUG] Toast mostrato:', message);
-                                } else {
-                                    console.log('[FRONTEND DEBUG] newArchitect non valido:', newArchitect);
                                 }
                             } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
                                 // Rimuovi eventuali segnali di controllo dal chunk prima di visualizzare
@@ -1545,10 +1518,7 @@
                                 cleanChunk = cleanChunk.replace(/\[ARCHITECT_CHANGE\]\w+/g, '');
                                 cleanChunk = cleanChunk.trim();
                                 
-                                console.log('[FRONTEND DEBUG] Chunk pulito per display:', cleanChunk.substring(0, 100));
-                                
                                 if (!cleanChunk) {
-                                    console.log('[FRONTEND DEBUG] Chunk vuoto dopo pulizia, saltando');
                                     continue;
                                 }
                                 if (thinkingElement) {
@@ -1589,16 +1559,12 @@
                     }
                 } catch (error) {
                     if (error.name === 'AbortError') {
-                        console.log('[FRONTEND DEBUG] Request abortita dall\'utente');
                         return;
                     }
-                    console.error('[FRONTEND DEBUG] Errore nel processing:', error);
-                    console.log('[FRONTEND DEBUG] Errore stack:', error.stack);
                     removeTypingIndicator();
                     addMessage('System', UI_TEXT[currentLang].connectionError);
                     showToast('Errore di connessione', 'error');
                 } finally {
-                    console.log('[FRONTEND DEBUG] Entrando in finally block');
                     currentAbortController = null;
                     updateSendButtonState(false);
                     userInput.disabled = false;
