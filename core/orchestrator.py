@@ -52,6 +52,7 @@ class ProviderErrorHandler:
         'QUOTA_EXCEEDED': 'quota_exceeded', 
         'CONNECTION_ERROR': 'connection_error',
         'USAGE_LIMIT': 'usage_limit',
+        'API_KEY_INVALID': 'api_key_invalid',
         'GENERIC_ERROR': 'generic_error'
     }
     
@@ -61,6 +62,7 @@ class ProviderErrorHandler:
         'quota_exceeded': "⚡ Quota API raggiunta per questo provider. Continuo seamlessly con l'architetto alternativo...",
         'usage_limit': "⏳ Limite di utilizzo raggiunto. Effettuo il passaggio trasparente al backup per proseguire la sessione...",
         'connection_error': "🔗 Problema di connessione rilevato. Provo con il provider alternativo...",
+        'api_key_invalid': "🔑 Chiave API non configurata o non valida per Gemini. Passo automaticamente a Claude per continuare senza interruzioni...",
         'generic_error': "⚠️ Errore temporaneo rilevato. Cambio provider per mantenere la continuità del servizio...",
         'both_failed': "🚫 Entrambi i provider hanno raggiunto i loro limiti di utilizzo. La sessione deve essere sospesa. Riprova più tardi quando i servizi saranno nuovamente disponibili.",
         'fallback_success': "✅ Passaggio completato con successo. La sessione continua con {provider}."
@@ -72,6 +74,7 @@ class ProviderErrorHandler:
         'quota_exceeded': "⚡ API quota reached for this provider. Continuing seamlessly with alternative architect...",
         'usage_limit': "⏳ Usage limit reached. Making transparent switch to backup provider to continue the session...",
         'connection_error': "🔗 Connection issue detected. Trying with alternative provider...",
+        'api_key_invalid': "🔑 API key not configured or invalid for Gemini. Automatically switching to Claude to continue seamlessly...",
         'generic_error': "⚠️ Temporary error detected. Switching provider to maintain service continuity...",
         'both_failed': "🚫 Both providers have reached their usage limits. Session must be suspended. Please try again later when services are available again.",
         'fallback_success': "✅ Switch completed successfully. Session continues with {provider}."
@@ -99,12 +102,20 @@ class ProviderErrorHandler:
             return ProviderErrorHandler.ERROR_TYPES['RATE_LIMIT']
         
         # Detection per quota API esaurite  
-        if 'quota' in error_text and ('exceeded' in error_text or 'exhaust' in error_text):
+        if ('quota' in error_text and ('exceeded' in error_text or 'exhaust' in error_text)) or \
+           'resource_exhausted' in error_text or \
+           'quota_exceeded' in error_text or \
+           'daily quota' in error_text or \
+           'monthly quota' in error_text:
             return ProviderErrorHandler.ERROR_TYPES['QUOTA_EXCEEDED']
         
         # Detection per limiti di utilizzo Claude
         if 'limit reached' in error_text or 'usage limit' in error_text or 'daily limit' in error_text:
             return ProviderErrorHandler.ERROR_TYPES['USAGE_LIMIT']
+        
+        # Detection per API key non valide
+        if any(keyword in error_text for keyword in ['api key not valid', 'api_key_invalid', 'invalid api key', 'api key is invalid']):
+            return ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
         
         # Detection per errori di connessione
         if any(keyword in error_text for keyword in ['connection', 'timeout', 'network', 'unavailable']):
@@ -659,13 +670,26 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             
             if self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session:
                 # Gemini con streaming
-                response_stream = self.chat_session.send_message(user_text, stream=True)
-                for chunk in response_stream:
-                    try:
-                        full_response += chunk.text
-                        yield chunk.text
-                    except ValueError:
-                        pass # Ignora i chunk vuoti
+                try:
+                    response_stream = self.chat_session.send_message(user_text, stream=True)
+                    for chunk in response_stream:
+                        try:
+                            full_response += chunk.text
+                            yield chunk.text
+                        except ValueError:
+                            pass # Ignora i chunk vuoti
+                except Exception as gemini_error:
+                    # Rileva il tipo di errore e tenta fallback se appropriato
+                    error_type = ProviderErrorHandler.detect_error_type(str(gemini_error))
+                    if ProviderErrorHandler.should_attempt_fallback(error_type) and not self.fallback_active:
+                        # Fallback a Claude
+                        brainstorm_prompt = self._create_brainstorm_prompt(user_text)
+                        full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                        yield full_response
+                    else:
+                        # Non è possibile il fallback o entrambi i provider hanno fallito
+                        yield f"Errore: {gemini_error}"
+                        return
             else:
                 # Claude (sia selezionato che fallback)
                 brainstorm_prompt = self._create_brainstorm_prompt(user_text)
