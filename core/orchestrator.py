@@ -379,6 +379,9 @@ class Orchestrator:
         self.current_architect = 'claude'
         self.fallback_reason = error_type
         
+        # Invia segnale di cambio architetto al frontend
+        self.output_queue.put("[ARCHITECT_CHANGE]claude")
+        
         try:
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
             
@@ -408,6 +411,9 @@ class Orchestrator:
         self.fallback_active = True
         self.current_architect = 'gemini'
         self.fallback_reason = error_type
+        
+        # Invia segnale di cambio architetto al frontend
+        self.output_queue.put("[ARCHITECT_CHANGE]gemini")
         
         try:
             response = self.model.generate_content(prompt, generation_config=self.generation_config)
