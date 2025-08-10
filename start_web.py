@@ -16,6 +16,11 @@ def main():
     
     # Check for virtual environment and activate if available
     venv_python = project_dir / ".venv" / "bin" / "python"
+    print(f"🔧 Debug: venv_python = {venv_python}")
+    print(f"🔧 Debug: sys.executable = {sys.executable}")
+    print(f"🔧 Debug: venv exists = {venv_python.exists()}")
+    print(f"🔧 Debug: same executable = {str(venv_python) == sys.executable}")
+    
     if venv_python.exists() and str(venv_python) != sys.executable:
         print("🔄 Utilizzando l'ambiente virtuale...")
         os.execv(str(venv_python), [str(venv_python)] + sys.argv)
