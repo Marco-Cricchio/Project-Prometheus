@@ -14,46 +14,53 @@ def main():
     project_dir = Path(__file__).parent
     os.chdir(project_dir)
     
-    # Check for virtual environment and activate if available
+    # Check if we're already in the venv to avoid re-exec
     venv_python = project_dir / ".venv" / "bin" / "python"
-    print(f"🔧 Debug: venv_python = {venv_python}")
-    print(f"🔧 Debug: sys.executable = {sys.executable}")
-    print(f"🔧 Debug: venv exists = {venv_python.exists()}")
-    print(f"🔧 Debug: same executable = {str(venv_python) == sys.executable}")
+    already_in_venv = venv_python.exists() and str(venv_python.resolve()) == str(Path(sys.executable).resolve())
     
-    if venv_python.exists() and str(venv_python) != sys.executable:
+    # Check for virtual environment and activate if available (only if not already in venv)
+    if venv_python.exists() and not already_in_venv:
         print("🔄 Utilizzando l'ambiente virtuale...")
         os.execv(str(venv_python), [str(venv_python)] + sys.argv)
     
     # Add the project directory to Python path
     sys.path.insert(0, str(project_dir))
-
+    
     print("🚀 Starting Project Prometheus Web Interface...")
     print("📍 Visit: http://localhost:5050")
     print("⏹️  Press Ctrl+C to stop the server")
     print("-" * 50)
     
-    # Initialize debug logging (after venv switch)
-    print("🐛 Debug logging attivo: ~/prometheus_debug.log")
-    print("🧪 Testing debug log initialization...")
+    # Debug environment details
+    print(f"🔧 Current Python: {sys.executable}")
+    print(f"🔧 Virtual env path: {venv_python}")  
+    print(f"🔧 Already in venv: {already_in_venv}")
     
-    try:
-        # Force orchestrator import to create log file
-        from core.orchestrator import Orchestrator
-        log_file_path = os.path.expanduser('~/prometheus_debug.log')
+    # Initialize debug logging (should run after venv switch)
+    if already_in_venv or not venv_python.exists():
+        print("🐛 Debug logging attivo: ~/prometheus_debug.log")
+        print("🧪 Testing debug log initialization...")
         
-        if os.path.exists(log_file_path):
-            print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
-        else:
-            print("🔄 Creating debug log file...")
-            test_orchestrator = Orchestrator(session_id="test_startup", lang='en')
-            print("✅ Orchestrator created successfully - debug log should be active")
+        try:
+            # Force orchestrator import to create log file
+            from core.orchestrator import Orchestrator
+            log_file_path = os.path.expanduser('~/prometheus_debug.log')
+            
             if os.path.exists(log_file_path):
-                print(f"✅ Debug log file created with {os.path.getsize(log_file_path)} bytes")
-        
-        print("-" * 30)
-    except Exception as e:
-        print(f"❌ Error initializing debug logging: {e}")
+                print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
+            else:
+                print("🔄 Creating debug log file...")
+                test_orchestrator = Orchestrator(session_id="test_startup", lang='en')
+                print("✅ Orchestrator created successfully - debug log should be active")
+                if os.path.exists(log_file_path):
+                    print(f"✅ Debug log file created with {os.path.getsize(log_file_path)} bytes")
+            
+            print("-" * 30)
+        except Exception as e:
+            print(f"❌ Error initializing debug logging: {e}")
+            print("-" * 30)
+    else:
+        print("🔄 Will initialize debug logging after venv switch...")
         print("-" * 30)
     
     try:
