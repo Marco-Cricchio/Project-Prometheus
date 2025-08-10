@@ -250,7 +250,17 @@ def delete_conversation():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
+    import logging
+    # Riduci i log di Flask per una console più pulita
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.WARNING)  # Mostra solo warning ed errori
+    
+    print("\n🚀 Avvio Project Prometheus Web Server")
+    print("📍 URL: http://localhost:5050")
+    print("🔇 Log ridotti per una console pulita")
+    print("-" * 40)
+    
     # Avviamo il server in modalità "threaded" per gestire correttamente
     # le richieste multiple e il lavoro in background.
     # host='0.0.0.0' permette connessioni da qualsiasi indirizzo
-    app.run(debug=True, host='0.0.0.0', port=5050, threaded=True)
+    app.run(debug=False, host='0.0.0.0', port=5050, threaded=True)

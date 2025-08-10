@@ -1052,13 +1052,39 @@
                     const contentDiv = currentStreamElement.querySelector('.message-content');
                     contentDiv.innerHTML = marked.parse(streamBuffer);
                     chatWindow.scrollTop = chatWindow.scrollHeight;
-                }, 50); // Buffer per 50ms
+                }, 16); // Ridotto a 16ms per evitare warning
             }
 
-            // CONVERSATION HISTORY
-            async function loadConversationHistory() {
-                const response = await fetch('/api/conversations');
-                const conversations = await response.json();
+            // CONVERSATION HISTORY con cache per ridurre richieste
+            let conversationHistoryCache = null;
+            let lastHistoryLoad = 0;
+            const HISTORY_CACHE_DURATION = 30000; // 30 secondi cache
+            
+            async function loadConversationHistory(forceRefresh = false) {
+                const now = Date.now();
+                
+                // Usa cache se disponibile e recente
+                if (!forceRefresh && conversationHistoryCache && 
+                    (now - lastHistoryLoad) < HISTORY_CACHE_DURATION) {
+                    renderConversationHistory(conversationHistoryCache);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/conversations');
+                    const conversations = await response.json();
+                    
+                    // Aggiorna cache
+                    conversationHistoryCache = conversations;
+                    lastHistoryLoad = now;
+                    
+                    renderConversationHistory(conversations);
+                } catch (error) {
+                    console.error('Errore nel caricamento conversazioni:', error);
+                }
+            }
+            
+            function renderConversationHistory(conversations) {
                 conversationList.innerHTML = '';
                 
                 conversations.forEach(sessionId => {
@@ -1153,7 +1179,7 @@
                     
                     addMessage('Prometheus', initialMessage); // Messaggio normale, non thinking
                     
-                    await loadConversationHistory(); // Refresh sidebar
+                    await loadConversationHistory(true); // Refresh sidebar
                     return;
                 }
                 
@@ -1238,7 +1264,7 @@
                     li.classList.toggle('active', li.dataset.sessionId === currentSessionId);
                 });
                 
-                await loadConversationHistory();
+                await loadConversationHistory(true);
             }
 
             // RENAME CONVERSATION AND DELETE
@@ -1277,7 +1303,7 @@
                                     if(originalId === currentSessionId) { 
                                         currentSessionId = data.new_id; 
                                     }
-                                    loadConversationHistory();
+                                    loadConversationHistory(true);
                                     showToast('Conversazione rinominata', 'success');
                                 } else {
                                     showToast("Errore: " + data.error, 'error');
@@ -1417,7 +1443,7 @@
                             // Nascondi il banner quando la directory è impostata
                             directoryInstructionBox.style.display = 'none !important';
                             directoryInstructionBox.style.visibility = 'hidden !important';
-                            await loadConversationHistory();
+                            await loadConversationHistory(true);
                             showToast('Directory impostata con successo', 'success');
                         } else {
                             addMessage('Prometheus', data.message || 'Errore sconosciuto.');
@@ -1556,13 +1582,20 @@
                                 if (thinkingElement) thinkingElement.remove();
                                 const promptText = chunk.replace('[CLAUDE_PROMPT]', '').trim();
                                 if (promptText) {
-                                    addMessage('Prometheus', `🚀 **Eseguendo comando:**\n\`\`\`bash\n${promptText}\n\`\`\``);
+                                    // Migliora la formattazione del comando
+                                    const formattedMessage = `⚡ **Comando in esecuzione**\n\n\`\`\`\n${promptText}\n\`\`\``;
+                                    addMessage('Prometheus', formattedMessage);
                                     showCommandExecution(promptText);
                                     updateDevelopmentStatus('executing');
                                 }
                                 addTypingIndicator();
                             } else if (chunk.includes('[CLAUDE_WORKING]')) {
                                 removeTypingIndicator();
+                                const workingText = chunk.replace('[CLAUDE_WORKING]', '').trim();
+                                if (workingText && workingText.length > 10) {
+                                    // Mostra solo risultati significativi, non messaggi brevi
+                                    addMessage('Prometheus', `🔧 **Risultato:**\n\n${workingText}`);
+                                }
                                 addTypingIndicator();
                                 updateDevelopmentStatus('working');
                                 updateDevStatus('Working', developmentSteps + 1);
@@ -1671,7 +1704,7 @@
                             currentStreamElement.dataset.finalized = 'true';
                         }
                         
-                        await loadConversationHistory();
+                        await loadConversationHistory(true);
                         updateConversationStatuses();
                     }
                 } catch (error) {
