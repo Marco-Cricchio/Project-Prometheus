@@ -718,6 +718,95 @@
                     setTimeout(() => toast.remove(), 300);
                 }, duration);
             }
+            
+            // ========== ENGINE DI FEEDBACK VISIVO AVANZATO ==========
+            
+            function updateConnectionStatus(status) {
+                const statusIndicator = document.getElementById('connection-status') || createConnectionStatus();
+                const statusMap = {
+                    'connecting': { text: 'Connessione...', color: '#ffa500', icon: '⚡' },
+                    'connected': { text: 'Connesso', color: '#4ecdc4', icon: '🔗' },
+                    'completed': { text: 'Completato', color: '#4ecdc4', icon: '✅' },
+                    'error': { text: 'Errore', color: '#ff6b6b', icon: '❌' }
+                };
+                
+                const config = statusMap[status] || statusMap['connecting'];
+                statusIndicator.innerHTML = `${config.icon} ${config.text}`;
+                statusIndicator.style.color = config.color;
+            }
+            
+            function createConnectionStatus() {
+                const status = document.createElement('div');
+                status.id = 'connection-status';
+                status.style.cssText = `
+                    position: fixed; top: 10px; right: 10px; 
+                    background: rgba(0,0,0,0.8); color: white; 
+                    padding: 8px 12px; border-radius: 6px; 
+                    font-size: 12px; z-index: 10000;
+                `;
+                document.body.appendChild(status);
+                return status;
+            }
+            
+            function updateDevelopmentStatus(phase) {
+                const statusBar = document.getElementById('dev-status-bar') || createDevelopmentStatusBar();
+                const phaseMap = {
+                    'analyzing': { text: '🧠 Analizzando...', progress: 25 },
+                    'executing': { text: '🚀 Eseguendo comando...', progress: 50 },
+                    'working': { text: '⚙️ Elaborando...', progress: 75 },
+                    'completed': { text: '✅ Completato', progress: 100 }
+                };
+                
+                const config = phaseMap[phase] || phaseMap['analyzing'];
+                statusBar.querySelector('.status-text').textContent = config.text;
+                statusBar.querySelector('.progress-fill').style.width = `${config.progress}%`;
+                
+                if (phase === 'completed') {
+                    setTimeout(() => statusBar.style.display = 'none', 2000);
+                } else {
+                    statusBar.style.display = 'block';
+                }
+            }
+            
+            function createDevelopmentStatusBar() {
+                const statusBar = document.createElement('div');
+                statusBar.id = 'dev-status-bar';
+                statusBar.style.cssText = `
+                    position: fixed; bottom: 20px; left: 50%; 
+                    transform: translateX(-50%); 
+                    background: rgba(0,0,0,0.9); color: white; 
+                    padding: 12px 20px; border-radius: 8px; 
+                    min-width: 300px; z-index: 10000; display: none;
+                `;
+                statusBar.innerHTML = `
+                    <div class="status-text" style="margin-bottom: 8px; font-weight: bold;"></div>
+                    <div style="background: rgba(255,255,255,0.2); height: 4px; border-radius: 2px;">
+                        <div class="progress-fill" style="background: #4ecdc4; height: 100%; border-radius: 2px; width: 0%; transition: width 0.3s ease;"></div>
+                    </div>
+                `;
+                document.body.appendChild(statusBar);
+                return statusBar;
+            }
+            
+            function showCommandExecution(command) {
+                // Feedback visivo per comando in esecuzione
+                const commandToast = document.createElement('div');
+                commandToast.className = 'toast info command-execution';
+                commandToast.innerHTML = `
+                    <span class="toast-icon">⚡</span>
+                    <div>
+                        <strong>Eseguendo:</strong><br>
+                        <code style="background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px;">${command}</code>
+                    </div>
+                `;
+                toastContainer.appendChild(commandToast);
+                
+                // Rimuovi dopo un po' più tempo per i comandi
+                setTimeout(() => {
+                    commandToast.classList.add('removing');
+                    setTimeout(() => commandToast.remove(), 300);
+                }, 5000);
+            }
 
             // PROGRESS BAR
             function updateProgress(percent) {
@@ -1337,6 +1426,9 @@
                     } else {
                         currentAbortController = new AbortController();
                         
+                        // Inizializza feedback visivo
+                        updateConnectionStatus('connecting');
+                        
                         const response = await fetch('/api/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1348,6 +1440,8 @@
                             }),
                             signal: currentAbortController.signal
                         });
+                        
+                        updateConnectionStatus('connected');
                         
 
                         const reader = response.body.getReader();
@@ -1368,9 +1462,27 @@
                             
                             let chunk = decoder.decode(value, { stream: true });
                             
-                            // Se il chunk contiene segnali multipli, processali separatamente
+                            // Sistema di feedback visivo avanzato
                             const processedSignals = new Set();
                             let remainingChunk = chunk;
+                            
+                            // Gestione segnali speciali di sistema
+                            if (chunk === '[KEEPALIVE]') {
+                                updateConnectionStatus('connected');
+                                continue;
+                            }
+                            
+                            if (chunk === '[STREAM_END]') {
+                                updateConnectionStatus('completed');
+                                break;
+                            }
+                            
+                            if (chunk.startsWith('[ERROR]')) {
+                                const errorMsg = chunk.replace('[ERROR]', '').trim();
+                                showToast(`Errore: ${errorMsg}`, 'error');
+                                addMessage('System', `❌ ${errorMsg}`);
+                                continue;
+                            }
                             
                             // 1. Processa messaggi di fallback
                             if (remainingChunk.includes('🔑 Chiave API non configurata')) {
@@ -1434,21 +1546,25 @@
                                 isDevelopmentPhase = true;
                             }
                             
-                            // Parse signals
+                            // Parse signals con feedback visivo avanzato
                             if (chunk.includes('[THINKING]')) {
                                 removeTypingIndicator();
                                 const thinkingMsg = isDevelopmentPhase ? UI_TEXT[currentLang].developing : null;
                                 thinkingElement = addMessage('Prometheus', '', true, thinkingMsg);
+                                updateDevelopmentStatus('analyzing');
                             } else if (chunk.includes('[CLAUDE_PROMPT]')) {
                                 if (thinkingElement) thinkingElement.remove();
                                 const promptText = chunk.replace('[CLAUDE_PROMPT]', '').trim();
                                 if (promptText) {
-                                    addMessage('Prometheus', `**Obiettivo per Claude:**\n\`\`\`\n${promptText}\n\`\`\``);
+                                    addMessage('Prometheus', `🚀 **Eseguendo comando:**\n\`\`\`bash\n${promptText}\n\`\`\``);
+                                    showCommandExecution(promptText);
+                                    updateDevelopmentStatus('executing');
                                 }
                                 addTypingIndicator();
                             } else if (chunk.includes('[CLAUDE_WORKING]')) {
                                 removeTypingIndicator();
                                 addTypingIndicator();
+                                updateDevelopmentStatus('working');
                                 updateDevStatus('Working', developmentSteps + 1);
                             } else if (chunk.includes('[INFO]')) {
                                 removeTypingIndicator();
@@ -1464,12 +1580,13 @@
                                 removeTypingIndicator();
                                 developmentSteps++;
                                 updateDevStatus('Running', developmentSteps);
+                                updateDevelopmentStatus('completed');
                                 const cleanChunk = chunk.replace('[CYCLE_COMPLETE]', '').trim();
                                 if (cleanChunk) {
                                     addMessage('Prometheus', cleanChunk);
                                 }
                                 updateProgress((developmentSteps % 10) * 10);
-                                showToast(`Step ${developmentSteps} completato`, 'success');
+                                showToast(`🎯 Ciclo ${developmentSteps} completato con successo!`, 'success');
                             } else if (chunk.includes('[STEP_SUCCESS]')) {
                                 // Skip this signal
                             } else if (chunk.includes('🔑 Chiave API non configurata') || chunk.includes('✅ Passaggio completato')) {
@@ -1559,11 +1676,15 @@
                     }
                 } catch (error) {
                     if (error.name === 'AbortError') {
+                        updateConnectionStatus('completed');
                         return;
                     }
+                    console.error('Errore:', error);
+                    updateConnectionStatus('error');
+                    updateDevelopmentStatus('completed');
                     removeTypingIndicator();
-                    addMessage('System', UI_TEXT[currentLang].connectionError);
-                    showToast('Errore di connessione', 'error');
+                    addMessage('System', `❌ ${UI_TEXT[currentLang].connectionError}`);
+                    showToast('🚨 Errore di connessione - Riprova', 'error');
                 } finally {
                     currentAbortController = null;
                     updateSendButtonState(false);

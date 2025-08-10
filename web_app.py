@@ -1,6 +1,7 @@
 # web_app.py
 import os
 import re
+import queue
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, make_response
 from core.orchestrator import Orchestrator, CONVERSATIONS_DIR, StatusEnum
@@ -92,17 +93,39 @@ def chat():
     
     def stream_from_queue():
         """
-        Questo generatore si mette in ascolto sulla coda dell'orchestratore
-        e invia i dati al frontend non appena diventano disponibili.
+        Generatore robusto per streaming di lunga durata con gestione errori.
         """
-        while True:
-            # .get() è bloccante: aspetta finché non c'è un elemento nella coda
-            chunk = orchestrator.output_queue.get()
-            if chunk is None: # 'None' è il nostro segnale per terminare lo stream
-                break
-            yield chunk
+        chunk_count = 0
+        try:
+            while True:
+                try:
+                    # Timeout per evitare hang indefiniti
+                    chunk = orchestrator.output_queue.get(timeout=300)  # 5 minuti max
+                    chunk_count += 1
+                    
+                    if chunk is None:
+                        break
+                    
+                    # Assicurati che il chunk sia una stringa valida
+                    if isinstance(chunk, str):
+                        yield chunk
+                    
+                except queue.Empty:
+                    # Keepalive per mantenere la connessione attiva
+                    yield "[KEEPALIVE]"
+                    continue
+                    
+        except Exception as e:
+            yield f"[ERROR] Errore nel streaming: {e}"
+        finally:
+            yield "[STREAM_END]"
             
-    return Response(stream_from_queue(), mimetype='text/plain')
+    # Response con headers ottimizzati per streaming
+    response = Response(stream_from_queue(), mimetype='text/plain')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'  # Disable nginx buffering
+    return response
 
 @app.route("/api/conversations", methods=["GET"])
 def get_conversations():
