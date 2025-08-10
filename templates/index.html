@@ -1427,10 +1427,28 @@
                                 showToast(`Step ${developmentSteps} completato`, 'success');
                             } else if (chunk.includes('[STEP_SUCCESS]')) {
                                 // Skip this signal
+                            } else if (chunk.includes('🔑 Chiave API non configurata') || chunk.includes('✅ Passaggio completato')) {
+                                console.log('[FRONTEND DEBUG] Messaggio di fallback rilevato');
+                                // Estrai solo i messaggi di stato
+                                const fallbackMessages = [];
+                                if (chunk.includes('🔑 Chiave API non configurata')) {
+                                    const keyMessage = chunk.match(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\./);
+                                    if (keyMessage) fallbackMessages.push(keyMessage[0]);
+                                }
+                                if (chunk.includes('✅ Passaggio completato')) {
+                                    const successMessage = chunk.match(/✅ Passaggio completato.*?con Claude\./);
+                                    if (successMessage) fallbackMessages.push(successMessage[0]);
+                                }
+                                
+                                // Mostra i messaggi di fallback
+                                fallbackMessages.forEach(msg => {
+                                    addMessage('System', msg);
+                                });
                             } else if (chunk.includes('[ARCHITECT_CHANGE]')) {
                                 console.log('[FRONTEND DEBUG] ARCHITECT_CHANGE rilevato!', chunk);
-                                // Estrae il nome dell'architetto dal segnale
-                                const newArchitect = chunk.replace('[ARCHITECT_CHANGE]', '').trim();
+                                // Estrae il nome dell'architetto dal segnale usando regex
+                                const architectMatch = chunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
+                                const newArchitect = architectMatch ? architectMatch[1] : '';
                                 console.log('[FRONTEND DEBUG] newArchitect estratto:', newArchitect);
                                 if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
                                     console.log('[FRONTEND DEBUG] Aggiornamento dropdown a:', newArchitect);
@@ -1453,6 +1471,21 @@
                                     console.log('[FRONTEND DEBUG] newArchitect non valido:', newArchitect);
                                 }
                             } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
+                                // Rimuovi eventuali segnali di controllo dal chunk prima di visualizzare
+                                let cleanChunk = chunk;
+                                
+                                // Rimuovi i messaggi di fallback che sono già stati processati
+                                cleanChunk = cleanChunk.replace(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\.\n*/g, '');
+                                cleanChunk = cleanChunk.replace(/✅ Passaggio completato.*?con Claude\.\n*/g, '');
+                                cleanChunk = cleanChunk.replace(/\[ARCHITECT_CHANGE\]\w+/g, '');
+                                cleanChunk = cleanChunk.trim();
+                                
+                                console.log('[FRONTEND DEBUG] Chunk pulito per display:', cleanChunk.substring(0, 100));
+                                
+                                if (!cleanChunk) {
+                                    console.log('[FRONTEND DEBUG] Chunk vuoto dopo pulizia, saltando');
+                                    continue;
+                                }
                                 if (thinkingElement) {
                                     thinkingElement.remove();
                                     thinkingElement = null;
@@ -1476,7 +1509,7 @@
                                     }
                                 }
                                 
-                                appendToStream(chunk);
+                                appendToStream(cleanChunk);
                             }
                         }
                         
