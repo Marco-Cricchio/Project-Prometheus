@@ -740,7 +740,17 @@ class Orchestrator:
         """Punto di ingresso che mette in coda le azioni."""
         self.conversation_history.append(f"[User]: {user_text}")
         
-        if "ACCENDI I MOTORI!" in user_text.upper() and self.mode == "BRAINSTORMING":
+        # CRITICAL FIX: Salva sempre la sessione dopo aver aggiunto input utente
+        self.save_state(verbose=False)
+        
+        # FIX: Trigger più flessibile per avviare lo sviluppo
+        trigger_phrases = ["accendi i motori", "inizia sviluppo", "avvia sviluppo", "start development", 
+                          "implementa", "sviluppa", "crea l'app", "build it", "let's code", "iniziamo"]
+        
+        user_text_lower = user_text.lower()
+        should_start_dev = any(phrase in user_text_lower for phrase in trigger_phrases)
+        
+        if should_start_dev and self.mode == "BRAINSTORMING":
             self.start_development_phase()
         else: # Qualsiasi altro input, sia brainstorming che feedback di sviluppo
             # Invece di restituire un generatore, mettiamo il messaggio in una coda di input
@@ -889,6 +899,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
     def _detect_project_completion(self, claude_response):
         """Rileva se Claude indica che il progetto è completato."""
         if not claude_response:
+            return False
+        
+        # CRITICAL FIX: Non rilevare completion durante brainstorming
+        if self.mode == "BRAINSTORMING":
             return False
         
         response_lower = claude_response.lower()
