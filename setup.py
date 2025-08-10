@@ -148,24 +148,9 @@ def install_dependencies():
     """Install project dependencies using UV with pip fallback"""
     print_step("Installing dependencies...")
     
-    # Determine which Python to use
-    python_cmd = sys.executable
-    
-    # If we're in a virtual environment or .venv exists, prefer using it
-    if Path(".venv").exists() and sys.prefix == sys.base_prefix:
-        venv_python = Path(".venv/bin/python")
-        if venv_python.exists():
-            python_cmd = str(venv_python)
-            print(f"Using virtual environment Python: {python_cmd}")
-    
     # First try with UV
     try:
-        if Path(".venv").exists() and sys.prefix == sys.base_prefix:
-            # Use UV with virtual environment
-            subprocess.run(["uv", "pip", "install", "-e", "."], check=True, capture_output=True)
-        else:
-            # Use UV with current environment
-            subprocess.run(["uv", "pip", "install", "-e", ".", "--python", python_cmd], check=True, capture_output=True)
+        subprocess.run(["uv", "pip", "install", "-e", "."], check=True, capture_output=True)
         print_success("Dependencies installed successfully with UV!")
         return
         
@@ -175,17 +160,17 @@ def install_dependencies():
     
     # Fallback to regular pip
     try:
-        # Install dependencies from pyproject.toml using the correct Python
-        subprocess.run([python_cmd, "-m", "pip", "install", "-e", "."], check=True)
+        # Install dependencies from pyproject.toml
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], check=True)
         print_success("Dependencies installed successfully with pip!")
         
     except subprocess.CalledProcessError as e:
         print_error(f"Both UV and pip installation failed: {e}")
         print("")
         print_error("Manual installation required:")
-        print(f"  {python_cmd} -m pip install flask python-dotenv rich google-generativeai")
-        print("  or create requirements.txt and run:")
-        print(f"  {python_cmd} -m pip install -r requirements.txt")
+        print("  pip install flask python-dotenv rich google-generativeai")
+        print("  or")
+        print("  pip install -r requirements.txt  # if you create one")
         sys.exit(1)
 
 
@@ -222,102 +207,17 @@ def setup_environment_file():
 
 
 def create_launch_scripts():
-    """Create convenient launch scripts"""
-    print_step("Creating launch scripts...")
+    """Check that launch scripts exist"""
+    print_step("Checking launch scripts...")
     
-    # Determine Python command to use
-    python_cmd = sys.executable
-    if Path(".venv").exists():
-        venv_python = Path(".venv/bin/python")
-        if venv_python.exists():
-            python_cmd = str(venv_python)
-    
-    # Web launcher - use existing start_web.py as template but ensure it works
-    if Path("start_web.py").exists():
-        print_success("start_web.py already exists and should work correctly!")
+    # Check that launcher scripts exist
+    if Path("start_web.py").exists() and Path("start_cli.py").exists():
+        print_success("Launch scripts found and ready to use!")
     else:
-        web_script = f"""#!/usr/bin/env python3
-"""
-Project Prometheus - Web Interface Launcher
-Starts the web interface on http://localhost:5050
-"""
-
-import os
-import sys
-from pathlib import Path
-
-def main():
-    """Main launcher function"""
-    # Change to the project directory
-    os.chdir(Path(__file__).parent)
-    
-    # Add the project directory to Python path
-    sys.path.insert(0, str(Path(__file__).parent))
-
-    print("🚀 Starting Project Prometheus Web Interface...")
-    print("📍 Visit: http://localhost:5050")
-    print("⏹️  Press Ctrl+C to stop the server")
-    print("-" * 50)
-    
-    try:
-        from web_app import app
-        app.run(debug=False, host='0.0.0.0', port=5050, threaded=True)
-    except KeyboardInterrupt:
-        print("\\n\\n🛑 Server stopped by user")
-    except Exception as e:
-        print(f"\\n❌ Error starting web server: {{e}}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-"""
-        with open("start_web.py", "w") as f:
-            f.write(web_script)
-        os.chmod("start_web.py", 0o755)
-    
-    # CLI launcher
-    cli_script = f"""#!/usr/bin/env python3
-"""
-Project Prometheus - CLI Launcher
-Starts the command-line interface
-"""
-
-import os
-import sys
-from pathlib import Path
-
-def main():
-    """Main launcher function"""
-    # Change to the project directory
-    os.chdir(Path(__file__).parent)
-    
-    # Add the project directory to Python path
-    sys.path.insert(0, str(Path(__file__).parent))
-
-    print("🚀 Starting Project Prometheus CLI...")
-    print("⏹️  Press Ctrl+C to exit")
-    print("-" * 50)
-    
-    try:
-        from cli import main as cli_main
-        cli_main()
-    except KeyboardInterrupt:
-        print("\\n\\n🛑 CLI stopped by user")
-    except Exception as e:
-        print(f"\\n❌ Error starting CLI: {{e}}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-"""
-    
-    with open("start_cli.py", "w") as f:
-        f.write(cli_script)
-    
-    # Make them executable
-    os.chmod("start_cli.py", 0o755)
-    
-    print_success("Launch scripts created!")
+        print_warning("Some launcher scripts are missing, but this won't affect functionality.")
+        print("You can still run the application directly with:")
+        print("  python3 web_app.py  # for web interface")
+        print("  python3 cli.py      # for command line interface")
 
 
 def main():
