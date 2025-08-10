@@ -254,6 +254,12 @@ class Orchestrator:
         self.is_running = False
         self.output_queue = queue.Queue()
         
+        # Completion detection per evitare loop infiniti
+        self.consecutive_completion_signals = 0
+        self.max_consecutive_completions = 3  # Stop dopo 3 segnali consecutivi di completamento
+        self.total_cycles = 0
+        self.max_total_cycles = 20  # Failsafe: stop dopo 20 cicli totali
+        
         # FIX: Gestione stati per UI dinamica e recovery
         self.status = StatusEnum.IDLE
         self.status_updated_at = datetime.now()
@@ -331,7 +337,7 @@ class Orchestrator:
         
         # Claude (selezionato originariamente o come fallback)
         try:
-            claude_response = _run_claude_with_prompt(full_dev_prompt, timeout=180)
+            claude_response = _run_claude_with_prompt(full_dev_prompt, self.working_directory, timeout=180)
             
             # Controlla se Claude ha restituito un messaggio di limite raggiunto
             if self._is_claude_limit_error(claude_response):
@@ -426,7 +432,7 @@ class Orchestrator:
         self.output_queue.put("[ARCHITECT_CHANGE]claude")
         
         try:
-            claude_response = _run_claude_with_prompt(prompt, timeout=180)
+            claude_response = _run_claude_with_prompt(prompt, self.working_directory, timeout=180)
             
             # Notifica successo del fallback
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
@@ -564,7 +570,10 @@ class Orchestrator:
             "original_architect": getattr(self, 'original_architect', self.architect_llm),
             "current_architect": getattr(self, 'current_architect', self.architect_llm),
             "fallback_active": getattr(self, 'fallback_active', False),
-            "fallback_reason": getattr(self, 'fallback_reason', None)
+            "fallback_reason": getattr(self, 'fallback_reason', None),
+            # Salva contatori completion detection
+            "consecutive_completion_signals": getattr(self, 'consecutive_completion_signals', 0),
+            "total_cycles": getattr(self, 'total_cycles', 0)
         }
         
         filepath = os.path.join(CONVERSATIONS_DIR, f"{self.session_id}.json")
@@ -612,6 +621,10 @@ class Orchestrator:
             self.current_architect = state.get("current_architect", user_selected_architect)
             self.fallback_active = state.get("fallback_active", False)
             self.fallback_reason = state.get("fallback_reason", None)
+            
+            # Ripristina contatori completion detection
+            self.consecutive_completion_signals = state.get("consecutive_completion_signals", 0)
+            self.total_cycles = state.get("total_cycles", 0)
             
             self._setup_initial_chat_session()
             
@@ -801,6 +814,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
 
         self.mode = "DEVELOPMENT"
         
+        # Reset contatori per detection del completamento
+        self.consecutive_completion_signals = 0
+        self.total_cycles = 0
+        
         try:
             # Crea il Piano di Progetto (PRP)
             prp_prompt = (
@@ -834,15 +851,78 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             self.output_queue.put(f"\n\nERRORE durante la creazione del PRP: {e}")
             self.mode = "BRAINSTORMING"
             self.output_queue.put(None)
+    
+    def _detect_project_completion(self, claude_response):
+        """Rileva se Claude indica che il progetto è completato."""
+        if not claude_response:
+            return False
+        
+        response_lower = claude_response.lower()
+        
+        # Keywords di completamento
+        completion_phrases = [
+            "applicazione completata",
+            "progetto completato", 
+            "completamente implementata",
+            "implementazione completata",
+            "pronto all'uso",
+            "pronta per l'uso",
+            "completamente funzionante",
+            "implementation complete",
+            "application completed",
+            "ready to use",
+            "fully functional",
+            "project completed",
+            "tutto implementato",
+            "all features implemented"
+        ]
+        
+        # Rileva frasi di repetizione (indica loop)
+        repetition_phrases = [
+            "the directory appears to be empty",
+            "l'applicazione è già",
+            "è già implementata",
+            "already implemented", 
+            "già completamente implementata"
+        ]
+        
+        completion_detected = any(phrase in response_lower for phrase in completion_phrases)
+        repetition_detected = any(phrase in response_lower for phrase in repetition_phrases)
+        
+        # Se rileva completamento o ripetizione, conta come segnale di fine
+        return completion_detected or repetition_detected
 
     def _development_loop(self):
-        """Il vero motore autonomo che gira in background, ora senza interruzioni."""
+        """Il vero motore autonomo che gira in background, con detection del completamento."""
         user_feedback = "Inizia il lavoro basandoti sul PRP."
         
         while self.is_running:
-            # Esegui un passo di sviluppo
+            self.total_cycles += 1
+            
+            # Failsafe: stop dopo troppi cicli
+            if self.total_cycles > self.max_total_cycles:
+                self.output_queue.put(f"[INFO]🛑 Interrotto automaticamente dopo {self.max_total_cycles} cicli per evitare loop infinito.")
+                self.is_running = False
+                break
+            
+            # Esegui un passo di sviluppo e cattura la risposta
+            step_response = ""
             for chunk in self.handle_development_step(user_feedback):
                 self.output_queue.put(chunk)
+                step_response += str(chunk)
+            
+            # Rileva se il progetto è completato
+            if self._detect_project_completion(step_response):
+                self.consecutive_completion_signals += 1
+                self.output_queue.put(f"[INFO]🔍 Rilevato segnale di completamento ({self.consecutive_completion_signals}/{self.max_consecutive_completions})")
+                
+                if self.consecutive_completion_signals >= self.max_consecutive_completions:
+                    self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
+                    self.is_running = False
+                    break
+            else:
+                # Reset counter se non rileva completamento
+                self.consecutive_completion_signals = 0
             
             # Resetta il feedback per il prossimo ciclo automatico
             user_feedback = None 
