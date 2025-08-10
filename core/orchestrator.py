@@ -685,23 +685,29 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             
             # Controlla se Gemini è selezionato ma non disponibile (API key invalida, ecc.)
             if self.architect_llm == 'gemini' and (_lazy_import_gemini() is False or self.chat_session is None):
+                print(f"DEBUG: Gemini selezionato ma non disponibile - lazy_import: {_lazy_import_gemini()}, chat_session: {self.chat_session}")
                 # Gemini è selezionato ma non disponibile - forza fallback
                 if not self.fallback_active:
+                    print(f"DEBUG: Forzando fallback per Gemini non disponibile")
                     error_type = ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
                     try:
                         brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                         full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                        print(f"DEBUG: Fallback forzato completato")
                         yield full_response
                     except Exception as fallback_error:
+                        print(f"DEBUG: Fallback forzato fallito: {fallback_error}")
                         yield f"Errore: {fallback_error}"
                         return
                 else:
+                    print(f"DEBUG: Fallback già attivo, usando Claude direttamente")
                     # Fallback già attivo, usa Claude direttamente
                     brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                     full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
                     yield full_response
             elif self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session is not None:
                 # Gemini con streaming
+                print(f"DEBUG: Tentando Gemini con chat_session disponibile")
                 try:
                     response_stream = self.chat_session.send_message(user_text, stream=True)
                     for chunk in response_stream:
@@ -711,23 +717,34 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                         except ValueError:
                             pass # Ignora i chunk vuoti
                 except Exception as gemini_error:
+                    print(f"DEBUG: Errore Gemini catturato: {gemini_error}")
                     # Rileva il tipo di errore e tenta fallback se appropriato
                     error_type = ProviderErrorHandler.detect_error_type(str(gemini_error))
-                    if ProviderErrorHandler.should_attempt_fallback(error_type) and not self.fallback_active:
+                    print(f"DEBUG: Tipo errore rilevato: {error_type}")
+                    should_fallback = ProviderErrorHandler.should_attempt_fallback(error_type)
+                    print(f"DEBUG: Should attempt fallback: {should_fallback}")
+                    print(f"DEBUG: Fallback already active: {self.fallback_active}")
+                    
+                    if should_fallback and not self.fallback_active:
+                        print(f"DEBUG: Tentando fallback a Claude...")
                         try:
                             # Fallback a Claude
                             brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                             full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                            print(f"DEBUG: Fallback completato con successo")
                             yield full_response
                         except Exception as fallback_error:
+                            print(f"DEBUG: Fallback fallito: {fallback_error}")
                             # Se anche il fallback fallisce
                             yield f"Errore: {fallback_error}"
                             return
                     else:
+                        print(f"DEBUG: Fallback non possibile - usando errore originale")
                         # Non è possibile il fallback o entrambi i provider hanno fallito
                         yield f"Errore: {gemini_error}"
                         return
             else:
+                print(f"DEBUG: Usando Claude - architect_llm: {self.architect_llm}")
                 # Claude (sia selezionato che fallback)
                 brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                 full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
