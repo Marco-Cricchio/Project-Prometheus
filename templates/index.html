@@ -1362,6 +1362,9 @@
                             
                             let chunk = decoder.decode(value, { stream: true });
                             
+                            // [TEMP DEBUG] Log ogni chunk che arriva
+                            console.log('[FRONTEND DEBUG] Chunk ricevuto:', chunk);
+                            
                             // Rileva se siamo in fase di sviluppo
                             if (chunk.includes('ACCENDI I MOTORI') || chunk.includes('START THE ENGINES') || 
                                 chunk.includes('[CLAUDE_PROMPT]') || chunk.includes('[CLAUDE_WORKING]')) {
@@ -1407,9 +1410,12 @@
                             } else if (chunk.includes('[STEP_SUCCESS]')) {
                                 // Skip this signal
                             } else if (chunk.includes('[ARCHITECT_CHANGE]')) {
+                                console.log('[FRONTEND DEBUG] ARCHITECT_CHANGE rilevato!', chunk);
                                 // Estrae il nome dell'architetto dal segnale
                                 const newArchitect = chunk.replace('[ARCHITECT_CHANGE]', '').trim();
+                                console.log('[FRONTEND DEBUG] newArchitect estratto:', newArchitect);
                                 if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
+                                    console.log('[FRONTEND DEBUG] Aggiornamento dropdown a:', newArchitect);
                                     // Aggiorna il dropdown dell'architetto
                                     architectSelect.value = newArchitect;
                                     currentArchitect = newArchitect;
@@ -1424,6 +1430,9 @@
                                         ? `Architetto cambiato automaticamente: ${architectName}`
                                         : `Architect automatically changed to: ${architectName}`;
                                     showToast(message, 'warning', 4000);
+                                    console.log('[FRONTEND DEBUG] Toast mostrato:', message);
+                                } else {
+                                    console.log('[FRONTEND DEBUG] newArchitect non valido:', newArchitect);
                                 }
                             } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
                                 if (thinkingElement) {
