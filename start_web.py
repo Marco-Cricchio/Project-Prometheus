@@ -16,7 +16,8 @@ def main():
     
     # Check if we're already in the venv to avoid re-exec
     venv_python = project_dir / ".venv" / "bin" / "python"
-    already_in_venv = venv_python.exists() and str(venv_python.resolve()) == str(Path(sys.executable).resolve())
+    # FIX: Better venv detection using sys.prefix
+    already_in_venv = sys.prefix != sys.base_prefix and str(project_dir / ".venv") in sys.prefix
     
     # Check for virtual environment and activate if available (only if not already in venv)
     if venv_python.exists() and not already_in_venv:
