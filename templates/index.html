@@ -1049,7 +1049,7 @@
 
             // UPDATE CONVERSATION STATUSES
             function updateConversationStatuses() {
-                fetch('http://localhost:5050/api/conversations')
+                fetch(`${window.location.origin}/api/conversations`)
                     .then(response => response.json())
                     .then(conversations => {
                         conversations.forEach(conv => {
@@ -1286,7 +1286,7 @@
                 }
                 
                 try {
-                    const response = await fetch('http://localhost:5050/api/conversations');
+                    const response = await fetch(`${window.location.origin}/api/conversations`);
                     const conversations = await response.json();
                     
                     // Aggiorna cache
@@ -1507,7 +1507,7 @@
                     const finalizeRename = () => {
                         const newName = input.value.trim();
                         if (newName && newName !== nameSpan.textContent) {
-                            fetch('http://localhost:5050/api/rename', {
+                            fetch(`${window.location.origin}/api/rename`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ old_id: originalId, new_name: newName })
@@ -1556,7 +1556,7 @@
                         : `Are you sure you want to delete the conversation "${conversationName}"?`;
                     
                     if (confirm(confirmMessage)) {
-                        fetch('http://localhost:5050/api/delete', {
+                        fetch(`${window.location.origin}/api/delete`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ session_id: sessionId })
@@ -1646,7 +1646,7 @@
                 try {
                     if (!workingDirectorySet) {
                         currentAbortController = new AbortController();
-                        const response = await fetch('http://localhost:5050/api/set_directory', {
+                        const response = await fetch(`${window.location.origin}/api/set_directory`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
@@ -1677,7 +1677,7 @@
                         // Inizializza feedback visivo
                         updateConnectionStatus('connecting');
                         
-                        const response = await fetch('http://localhost:5050/api/chat', {
+                        const response = await fetch(`${window.location.origin}/api/chat`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ 
