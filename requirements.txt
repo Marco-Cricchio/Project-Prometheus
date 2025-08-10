@@ -1,0 +1,14 @@
+# Project Prometheus - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core web framework
+flask>=2.3.0
+
+# Environment configuration
+python-dotenv>=1.0.0
+
+# Rich console output and UI
+rich>=13.0.0
+
+# Google Gemini AI integration (optional)
+google-generativeai>=0.8.0

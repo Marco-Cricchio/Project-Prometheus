@@ -7,7 +7,7 @@ name = "project-prometheus"
 version = "1.0.0"
 description = "AI-powered autonomous development assistant with TDD cycle"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "MPL-2.0"}
 authors = [
     {name = "Project Prometheus Team"},
 ]
@@ -15,7 +15,7 @@ keywords = ["ai", "development", "automation", "tdd", "claude", "gemini"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -44,9 +44,9 @@ prometheus-web = "web_app:main"
 prometheus-cli = "cli:main"
 
 [project.urls]
-Homepage = "https://github.com/your-username/project-prometheus"
-Repository = "https://github.com/your-username/project-prometheus"
-Issues = "https://github.com/your-username/project-prometheus/issues"
+Homepage = "https://github.com/Marco-Cricchio/Project-Prometheus"
+Repository = "https://github.com/Marco-Cricchio/Project-Prometheus"
+Issues = "https://github.com/Marco-Cricchio/Project-Prometheus/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["core"]

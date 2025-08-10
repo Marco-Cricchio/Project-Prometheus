@@ -130,16 +130,32 @@ def setup_virtual_environment():
 
 
 def install_dependencies():
-    """Install project dependencies using UV"""
+    """Install project dependencies using UV with pip fallback"""
     print_step("Installing dependencies...")
     
+    # First try with UV
     try:
-        # Install the project in editable mode with all dependencies
         subprocess.run(["uv", "pip", "install", "-e", "."], check=True, capture_output=True)
-        print_success("Dependencies installed successfully!")
+        print_success("Dependencies installed successfully with UV!")
+        return
+        
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print_warning(f"UV installation failed: {e}")
+        print_step("Trying fallback installation with pip...")
+    
+    # Fallback to regular pip
+    try:
+        # Install dependencies from pyproject.toml
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], check=True)
+        print_success("Dependencies installed successfully with pip!")
         
     except subprocess.CalledProcessError as e:
-        print_error(f"Failed to install dependencies: {e}")
+        print_error(f"Both UV and pip installation failed: {e}")
+        print("")
+        print_error("Manual installation required:")
+        print("  pip install flask python-dotenv rich google-generativeai")
+        print("  or")
+        print("  pip install -r requirements.txt  # if you create one")
         sys.exit(1)
 
 

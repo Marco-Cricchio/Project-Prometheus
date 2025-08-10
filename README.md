@@ -30,13 +30,22 @@
    python setup.py
    ```
 
-2. **Configure API Keys** (Optional)
+2. **Alternative Installation** (if setup.py fails)
+   ```bash
+   # Option A: Using pip directly
+   pip install -r requirements.txt
+   
+   # Option B: Manual dependency installation
+   pip install flask python-dotenv rich google-generativeai
+   ```
+
+3. **Configure API Keys** (Optional)
    ```bash
    # Edit .env file with your API keys
    nano .env  # or use any text editor
    ```
 
-3. **Launch Prometheus**
+4. **Launch Prometheus**
    ```bash
    # Web Interface (Recommended)
    python start_web.py
