@@ -25,8 +25,8 @@
 
 1. **Clone and Setup**
    ```bash
-   git clone https://github.com/your-username/project-prometheus.git
-   cd project-prometheus
+   git clone https://github.com/Marco-Cricchio/Project-Prometheus.git
+   cd Project-Prometheus
    python setup.py
    ```
 
