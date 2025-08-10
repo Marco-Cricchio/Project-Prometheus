@@ -6,14 +6,31 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, make_response
 from core.orchestrator import Orchestrator, CONVERSATIONS_DIR, StatusEnum
 
-# Force logging initialization by importing
+# FORCE debug logging initialization at web_app import time
 import logging
 log_file_path = os.path.expanduser('~/prometheus_debug.log')
-print(f"🐛 Checking debug log file: {log_file_path}")
-if os.path.exists(log_file_path):
-    print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
-else:
-    print("❌ Debug log file not found - will be created on first orchestrator use")
+print("🐛 WEB_APP: FORCING Debug logging initialization...")
+try:
+    from core.orchestrator import Orchestrator
+    print(f"🐛 WEB_APP: Log file path: {log_file_path}")
+    
+    if os.path.exists(log_file_path):
+        print(f"✅ WEB_APP: Debug log file EXISTS with {os.path.getsize(log_file_path)} bytes")
+    else:
+        print("🔄 WEB_APP: Creating debug log file NOW...")
+        test_orchestrator = Orchestrator(session_id="test_webapp_import", lang='en')
+        print("✅ WEB_APP: Orchestrator created successfully")
+        if os.path.exists(log_file_path):
+            print(f"✅ WEB_APP: Debug log file CREATED with {os.path.getsize(log_file_path)} bytes")
+        else:
+            print("❌ WEB_APP: Debug log file STILL NOT FOUND!")
+    
+    print("-" * 30)
+except Exception as e:
+    print(f"❌ WEB_APP: EXCEPTION in debug logging: {e}")
+    import traceback
+    traceback.print_exc()
+    print("-" * 30)
 
 app = Flask(__name__)
 orchestrator_instances = {}
