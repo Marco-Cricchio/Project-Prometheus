@@ -995,7 +995,23 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
 
     def _development_loop(self):
         """Il vero motore autonomo che gira in background, con detection del completamento."""
-        user_feedback = "Inizia il lavoro basandoti sul PRP."
+        
+        # CRITICAL FIX: Controlla se ci sono file esistenti per primo feedback intelligente
+        try:
+            import os
+            files_in_dir = []
+            if os.path.exists(self.working_directory):
+                for root, dirs, files in os.walk(self.working_directory):
+                    for file in files:
+                        rel_path = os.path.relpath(os.path.join(root, file), self.working_directory)
+                        files_in_dir.append(rel_path)
+            
+            if files_in_dir:
+                user_feedback = f"CRITICAL: La directory contiene già questi file: {', '.join(files_in_dir)}. NON dire 'progetto già completo'. Analizza se questi file corrispondono esattamente ai requisiti del PRP attuale. Se NO, eliminali e ricrea. Se SÌ, verifica che funzionino correttamente. Inizia l'analisi."
+            else:
+                user_feedback = "Inizia il lavoro basandoti sul PRP. La directory è vuota."
+        except Exception:
+            user_feedback = "Inizia il lavoro basandoti sul PRP."
         
         while self.is_running:
             self.total_cycles += 1
@@ -1163,12 +1179,14 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 
                 "**DECISION TREE - LEGGI E SEGUI ESATTAMENTE:**\n"
                 "1️⃣ **SE DIRECTORY VUOTA/NESSUN FILE:** → Setup iniziale (package.json, struttura base)\n"
-                "2️⃣ **SE SETUP FATTO MA NO TESTING FRAMEWORK:** → Installa framework test\n"
-                "3️⃣ **SE FRAMEWORK TEST OK MA NO TEST FILES:** → RED PHASE (crea primo test che fallisce)\n"
-                "4️⃣ **SE TEST FALLISCONO (ERROR/FAILED):** → GREEN PHASE (implementa per far passare)\n"
-                "5️⃣ **SE TEST PASSANO (PASSED/SUCCESS):** → Prossimo RED PHASE (test per nuova feature)\n"
-                "6️⃣ **SE ERRORI DI COMPILAZIONE/IMPORT:** → Fix errori prima di continuare\n"
-                "7️⃣ **SE CODICE FUNZIONA MA NON PULITO:** → REFACTOR PHASE (migliora qualità)\n\n"
+                "2️⃣ **SE CI SONO FILE MA NON CORRISPONDONO AI NUOVI REQUISITI:** → Elimina file obsoleti e ricrea\n"
+                "3️⃣ **SE CI SONO FILE CHE SEMBRANO COMPLETI MA NUOVI REQUISITI:** → Verifica se corrispondono al PRP attuale, se no, sovrascrivi\n"
+                "4️⃣ **SE SETUP FATTO MA NO TESTING FRAMEWORK:** → Installa framework test\n"
+                "5️⃣ **SE FRAMEWORK TEST OK MA NO TEST FILES:** → RED PHASE (crea primo test che fallisce)\n"
+                "6️⃣ **SE TEST FALLISCONO (ERROR/FAILED):** → GREEN PHASE (implementa per far passare)\n"
+                "7️⃣ **SE TEST PASSANO (PASSED/SUCCESS):** → Prossimo RED PHASE (test per nuova feature)\n"
+                "8️⃣ **SE ERRORI DI COMPILAZIONE/IMPORT:** → Fix errori prima di continuare\n"
+                "9️⃣ **SE CODICE FUNZIONA MA NON PULITO:** → REFACTOR PHASE (migliora qualità)\n\n"
                 
                 "**COMANDI SPECIFICI PER FASE:**\n"
                 "• **Setup:** `npm init -y` o `touch requirements.txt`\n"
@@ -1189,7 +1207,9 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 "4. SE vedi test PASSED → crea nuovo test per prossima feature\n"
                 "5. SE vedi errori → risolvili prima di continuare con TDD\n"
                 "6. **CRITICAL:** NON creare sottocartelle con il nome del progetto. La directory corrente è già la root.\n"
-                "7. **CRITICAL:** Tutti i file vanno nella directory corrente o in sottocartelle logiche (src/, tests/, etc.)\n\n"
+                "7. **CRITICAL:** Tutti i file vanno nella directory corrente o in sottocartelle logiche (src/, tests/, etc.)\n"
+                "8. **CRITICAL ANTI-LOOP:** NEVER say 'progetto già completo' or 'already implemented' when files exist. ALWAYS check if they match current PRP requirements first.\n"
+                "9. **CRITICAL ANTI-LOOP:** If files exist but don't match PRP specs, overwrite them. If they do match, test them to verify functionality.\n\n"
                 
                 "**FORMATO OUTPUT:** \n"
                 "Rispondi SOLO con:\n"
