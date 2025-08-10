@@ -6,31 +6,61 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, make_response
 from core.orchestrator import Orchestrator, CONVERSATIONS_DIR, StatusEnum
 
-# FORCE debug logging initialization at web_app import time
+# FORCE debug logging initialization at web_app import time - WITH FILE OUTPUT
 import logging
+import sys
 log_file_path = os.path.expanduser('~/prometheus_debug.log')
-print("🐛 WEB_APP: FORCING Debug logging initialization...")
+status_file = os.path.expanduser('~/prometheus_startup_status.txt')
+
+# Force output to stderr to bypass Flask suppression
+sys.stderr.write("🐛 WEB_APP: FORCING Debug logging initialization...\n")
+sys.stderr.flush()
+
+# Also write to a status file for verification
+with open(status_file, 'w') as f:
+    f.write("WEB_APP IMPORT STARTED\n")
+    f.write(f"Log file path: {log_file_path}\n")
+
 try:
     from core.orchestrator import Orchestrator
-    print(f"🐛 WEB_APP: Log file path: {log_file_path}")
+    sys.stderr.write(f"🐛 WEB_APP: Log file path: {log_file_path}\n")
+    sys.stderr.flush()
     
     if os.path.exists(log_file_path):
-        print(f"✅ WEB_APP: Debug log file EXISTS with {os.path.getsize(log_file_path)} bytes")
+        size = os.path.getsize(log_file_path)
+        sys.stderr.write(f"✅ WEB_APP: Debug log file EXISTS with {size} bytes\n")
+        with open(status_file, 'a') as f:
+            f.write(f"Log file exists: {size} bytes\n")
     else:
-        print("🔄 WEB_APP: Creating debug log file NOW...")
+        sys.stderr.write("🔄 WEB_APP: Creating debug log file NOW...\n")
+        sys.stderr.flush()
         test_orchestrator = Orchestrator(session_id="test_webapp_import", lang='en')
-        print("✅ WEB_APP: Orchestrator created successfully")
+        sys.stderr.write("✅ WEB_APP: Orchestrator created successfully\n")
+        sys.stderr.flush()
+        
+        with open(status_file, 'a') as f:
+            f.write("Orchestrator created\n")
+            
         if os.path.exists(log_file_path):
-            print(f"✅ WEB_APP: Debug log file CREATED with {os.path.getsize(log_file_path)} bytes")
+            size = os.path.getsize(log_file_path)
+            sys.stderr.write(f"✅ WEB_APP: Debug log file CREATED with {size} bytes\n")
+            with open(status_file, 'a') as f:
+                f.write(f"Log file created: {size} bytes\n")
         else:
-            print("❌ WEB_APP: Debug log file STILL NOT FOUND!")
+            sys.stderr.write("❌ WEB_APP: Debug log file STILL NOT FOUND!\n")
+            with open(status_file, 'a') as f:
+                f.write("ERROR: Log file not created\n")
     
-    print("-" * 30)
+    sys.stderr.write("-" * 30 + "\n")
+    sys.stderr.flush()
 except Exception as e:
-    print(f"❌ WEB_APP: EXCEPTION in debug logging: {e}")
-    import traceback
-    traceback.print_exc()
-    print("-" * 30)
+    error_msg = f"❌ WEB_APP: EXCEPTION in debug logging: {e}\n"
+    sys.stderr.write(error_msg)
+    sys.stderr.flush()
+    with open(status_file, 'a') as f:
+        f.write(f"EXCEPTION: {e}\n")
+        import traceback
+        f.write(traceback.format_exc())
 
 app = Flask(__name__)
 orchestrator_instances = {}
