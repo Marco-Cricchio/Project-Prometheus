@@ -698,16 +698,22 @@ class Orchestrator:
 
     def process_user_input(self, user_text):
         """Punto di ingresso che mette in coda le azioni."""
+        print(f"[TEMP DEBUG] process_user_input chiamato con: {user_text}")
         self.conversation_history.append(f"[User]: {user_text}")
         
         if "ACCENDI I MOTORI!" in user_text.upper() and self.mode == "BRAINSTORMING":
+            print(f"[TEMP DEBUG] Avvio fase sviluppo")
             self.start_development_phase()
         else: # Qualsiasi altro input, sia brainstorming che feedback di sviluppo
+            print(f"[TEMP DEBUG] Entrando in handle_brainstorming")
             # Invece di restituire un generatore, mettiamo il messaggio in una coda di input
             # per essere elaborato dal thread principale (semplificazione per ora)
             for chunk in self.handle_brainstorming(user_text):
-                 self.output_queue.put(chunk)
+                print(f"[TEMP DEBUG] Putting chunk in queue: {chunk[:100] if chunk else 'None'}...")
+                self.output_queue.put(chunk)
+            print(f"[TEMP DEBUG] Mettendo segnale di terminazione (None) in coda")
             self.output_queue.put(None) # Segnale di fine per questo stream
+            print(f"[TEMP DEBUG] process_user_input completato")
 
     def _create_brainstorm_prompt(self, user_text):
         """Crea il prompt standardizzato per il brainstorming."""
@@ -732,6 +738,8 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
 
     def handle_brainstorming(self, user_text):
         """Gestisce il brainstorming e mette l'output nella coda."""
+        print(f"[TEMP DEBUG] handle_brainstorming chiamato con: {user_text}")
+        print(f"[TEMP DEBUG] architect_llm: {self.architect_llm}")
         try:
             full_response = ""
             

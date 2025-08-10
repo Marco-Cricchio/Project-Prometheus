@@ -1336,6 +1336,13 @@
                         }
                     } else {
                         currentAbortController = new AbortController();
+                        console.log('[FRONTEND DEBUG] Invio richiesta a /api/chat con:', {
+                            message: messageText, 
+                            session_id: currentSessionId, 
+                            lang: currentLang,
+                            architect: currentArchitect
+                        });
+                        
                         const response = await fetch('/api/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -1347,18 +1354,29 @@
                             }),
                             signal: currentAbortController.signal
                         });
+                        
+                        console.log('[FRONTEND DEBUG] Risposta ricevuta:', response.status, response.statusText);
+                        console.log('[FRONTEND DEBUG] Response headers:', [...response.headers.entries()]);
 
                         const reader = response.body.getReader();
                         const decoder = new TextDecoder();
+                        console.log('[FRONTEND DEBUG] Reader inizializzato, iniziando loop di lettura');
                         
                         removeTypingIndicator();
                         currentStreamElement = null;
                         streamBuffer = '';
                         let thinkingElement = null;
+                        let chunkCount = 0;
 
                         while (true) {
+                            console.log('[FRONTEND DEBUG] Aspettando prossimo chunk...');
                             const { value, done } = await reader.read();
-                            if (done) break;
+                            chunkCount++;
+                            console.log('[FRONTEND DEBUG] Read completato:', { chunkCount, done, hasValue: !!value });
+                            if (done) {
+                                console.log('[FRONTEND DEBUG] Stream terminato dopo', chunkCount, 'chunks');
+                                break;
+                            }
                             
                             let chunk = decoder.decode(value, { stream: true });
                             
@@ -1473,14 +1491,16 @@
                     }
                 } catch (error) {
                     if (error.name === 'AbortError') {
-                        console.log('Request was aborted');
+                        console.log('[FRONTEND DEBUG] Request abortita dall\'utente');
                         return;
                     }
-                    console.error('Errore:', error);
+                    console.error('[FRONTEND DEBUG] Errore nel processing:', error);
+                    console.log('[FRONTEND DEBUG] Errore stack:', error.stack);
                     removeTypingIndicator();
                     addMessage('System', UI_TEXT[currentLang].connectionError);
                     showToast('Errore di connessione', 'error');
                 } finally {
+                    console.log('[FRONTEND DEBUG] Entrando in finally block');
                     currentAbortController = null;
                     updateSendButtonState(false);
                     userInput.disabled = false;

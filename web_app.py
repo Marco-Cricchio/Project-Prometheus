@@ -85,10 +85,13 @@ def chat():
         return jsonify({"error": "Input o session_id mancante"}), 400
     
     orchestrator = get_orchestrator(session_id, lang, architect_llm)
+    print(f"[TEMP DEBUG] Orchestrator ottenuto per sessione {session_id}")
     
     # Questa chiamata è ora non-bloccante. Elabora l'input e potrebbe
     # avviare il thread di sviluppo in background.
+    print(f"[TEMP DEBUG] Chiamando process_user_input con: {user_input}")
     orchestrator.process_user_input(user_input)
+    print(f"[TEMP DEBUG] process_user_input completato, iniziando streaming")
     
     def stream_from_queue():
         """
