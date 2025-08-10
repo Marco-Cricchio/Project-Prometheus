@@ -53,7 +53,13 @@
    nano .env  # or use any text editor
    ```
 
-4. **Launch Prometheus**
+4. **Test Installation** (Optional but recommended)
+   ```bash
+   # Verify everything is working correctly
+   python test_installation.py
+   ```
+
+5. **Launch Prometheus**
    ```bash
    # Web Interface (Recommended)
    python start_web.py
