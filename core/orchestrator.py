@@ -877,7 +877,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "all features implemented"
         ]
         
-        # Rileva frasi di repetizione (indica loop) - AGGIORNATE CON FRASI DAL LOG
+        # Rileva frasi di repetizione (indica loop) - AGGIORNATE CON FRASI DAL LOG PIÙ RECENTE
         repetition_phrases = [
             "the directory appears to be empty",
             "l'applicazione è già",
@@ -890,7 +890,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "già completamente implementata",
             "progetto è pronto",
             "tutto è implementato",
-            # Nuove frasi dal log utente
+            # Nuove frasi dal log utente precedente
             "progetto è già completo",
             "already exists and contains exactly",
             "file già stato creato correttamente",
@@ -900,7 +900,20 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "project is complete according",
             "meets the specifications",
             "il bottone è già implementato",
-            "progetto è completo secondo"
+            "progetto è completo secondo",
+            # NUOVE FRASI DAL LOG ATTUALE - ciclo HTML button
+            "looking at the current state",
+            "i understand you've completed",
+            "following the decision tree",
+            "files esistenti:",
+            "status generale:",
+            "claude confirmed implementation",
+            "the jest configuration",
+            "no tests found",
+            "implementation completed",
+            "red button has been implemented",
+            "bottone.html exists",
+            "since we have a working html file"
         ]
         
         completion_detected = any(phrase in response_lower for phrase in completion_phrases)
