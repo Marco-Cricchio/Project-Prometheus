@@ -8,13 +8,14 @@ import os
 import sys
 from pathlib import Path
 
-# Change to the project directory
-os.chdir(Path(__file__).parent)
+def main():
+    """Main launcher function"""
+    # Change to the project directory
+    os.chdir(Path(__file__).parent)
+    
+    # Add the project directory to Python path
+    sys.path.insert(0, str(Path(__file__).parent))
 
-# Add the project directory to Python path
-sys.path.insert(0, str(Path(__file__).parent))
-
-if __name__ == "__main__":
     print("🚀 Starting Project Prometheus Web Interface...")
     print("📍 Visit: http://localhost:5050")
     print("⏹️  Press Ctrl+C to stop the server")
@@ -28,3 +29,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Error starting web server: {e}")
         sys.exit(1)
+
+if __name__ == "__main__":
+    main()
