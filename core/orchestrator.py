@@ -376,7 +376,7 @@ class Orchestrator:
         ])
     
     def _attempt_fallback_to_claude_for_brainstorming(self, error_type, prompt):
-        """Versione per brainstorming che restituisce messaggi invece di metterli nella coda."""
+        """Versione per brainstorming che manda messaggi separati nella coda."""
         print(f"[TEMP DEBUG] _attempt_fallback_to_claude_for_brainstorming chiamato con error_type: {error_type}")
         print(f"[TEMP DEBUG] Prompt length: {len(prompt)}")
         print(f"[TEMP DEBUG] Current fallback_active: {getattr(self, 'fallback_active', 'Non definito')}")
@@ -389,23 +389,35 @@ class Orchestrator:
         try:
             # Messaggio di notifica del cambio
             user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
+            print(f"[TEMP DEBUG] Inviando user_message nella coda: {user_message[:100]}...")
+            self.output_queue.put(f"\n{user_message}\n")
             
             # Segnale di cambio architetto
-            architect_change_signal = "[ARCHITECT_CHANGE]claude"
+            print(f"[TEMP DEBUG] Inviando segnale cambio architetto nella coda")
+            self.output_queue.put("[ARCHITECT_CHANGE]claude")
             
+            print(f"[TEMP DEBUG] Chiamando Claude...")
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
+            print(f"[TEMP DEBUG] Claude ha risposto con {len(claude_response) if claude_response else 0} caratteri")
+            
+            # Invia la risposta di Claude
+            print(f"[TEMP DEBUG] Inviando risposta Claude nella coda")
+            self.output_queue.put(claude_response)
             
             # Messaggio di successo
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
+            print(f"[TEMP DEBUG] Inviando success_message nella coda: {success_message[:100]}...")
+            self.output_queue.put(f"\n{success_message}\n")
             
-            # Combina tutti i messaggi per il brainstorming
-            combined_response = f"{user_message}\n{architect_change_signal}\n{claude_response}\n{success_message}"
-            return combined_response
+            # Non restituire nulla - tutto è stato inviato tramite coda
+            return None
             
         except Exception as claude_error:
+            print(f"[TEMP DEBUG] Claude ha fallito: {claude_error}")
             # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
             both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
-            raise Exception(both_failed_msg)
+            self.output_queue.put(f"Errore: {both_failed_msg}")
+            return None
 
     def _attempt_fallback_to_claude(self, error_type, prompt):
         """Tenta il fallback da Gemini a Claude (versione originale per sviluppo)."""
@@ -730,8 +742,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                     error_type = ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
                     try:
                         brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                        full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
-                        yield full_response
+                        self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
+                        # Il fallback ha messo tutto nella coda - termina il generatore
+                        self.output_queue.put(None)
+                        return
                     except Exception as fallback_error:
                         yield f"Errore: {fallback_error}"
                         return
@@ -759,8 +773,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                         try:
                             # Fallback a Claude
                             brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                            full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
-                            yield full_response
+                            self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
+                            # Il fallback ha messo tutto nella coda - termina il generatore
+                            self.output_queue.put(None)
+                            return
                         except Exception as fallback_error:
                             # Se anche il fallback fallisce
                             yield f"Errore: {fallback_error}"
