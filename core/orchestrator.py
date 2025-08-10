@@ -256,9 +256,9 @@ class Orchestrator:
         
         # Completion detection per evitare loop infiniti
         self.consecutive_completion_signals = 0
-        self.max_consecutive_completions = 2  # Stop dopo 2 segnali consecutivi (più aggressivo)
+        self.max_consecutive_completions = 1  # Stop dopo 1 solo segnale (ULTRA aggressivo)
         self.total_cycles = 0
-        self.max_total_cycles = 15  # Failsafe: stop dopo 15 cicli totali (ridotto)
+        self.max_total_cycles = 10  # Failsafe: stop dopo 10 cicli totali (molto ridotto)
         
         # FIX: Gestione stati per UI dinamica e recovery
         self.status = StatusEnum.IDLE
@@ -877,7 +877,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "all features implemented"
         ]
         
-        # Rileva frasi di repetizione (indica loop) - AGGIORNATE
+        # Rileva frasi di repetizione (indica loop) - AGGIORNATE CON FRASI DAL LOG
         repetition_phrases = [
             "the directory appears to be empty",
             "l'applicazione è già",
@@ -889,24 +889,41 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "already complete", 
             "già completamente implementata",
             "progetto è pronto",
-            "tutto è implementato"
+            "tutto è implementato",
+            # Nuove frasi dal log utente
+            "progetto è già completo",
+            "already exists and contains exactly",
+            "file già stato creato correttamente",
+            "secondo le specifiche",
+            "html file already exists",
+            "exactly what was requested",
+            "project is complete according",
+            "meets the specifications",
+            "il bottone è già implementato",
+            "progetto è completo secondo"
         ]
         
         completion_detected = any(phrase in response_lower for phrase in completion_phrases)
         repetition_detected = any(phrase in response_lower for phrase in repetition_phrases)
         
-        # DEBUG: Log detection details
+        # DEBUG: Log detection details - SEMPRE per diagnosticare
+        matched_phrases = []
+        for phrase in completion_phrases:
+            if phrase in response_lower:
+                matched_phrases.append(f"COMPLETION: {phrase}")
+        for phrase in repetition_phrases:
+            if phrase in response_lower:
+                matched_phrases.append(f"REPETITION: {phrase}")
+        
         if completion_detected or repetition_detected:
-            matched_phrases = []
-            for phrase in completion_phrases:
-                if phrase in response_lower:
-                    matched_phrases.append(f"COMPLETION: {phrase}")
-            for phrase in repetition_phrases:
-                if phrase in response_lower:
-                    matched_phrases.append(f"REPETITION: {phrase}")
-            
-            print(f"[DEBUG] Completion detection triggered: {matched_phrases}")
+            print(f"[DEBUG] ✅ DETECTION TRIGGERED: {matched_phrases}")
             print(f"[DEBUG] Response snippet: {response_lower[:200]}...")
+        else:
+            print(f"[DEBUG] ❌ No completion detected in response")
+            # Mostra alcune parole chiave per debug
+            key_words = [word for word in response_lower.split() if any(target in word for target in ['completo', 'complete', 'già', 'already', 'esistere', 'exists'])]
+            if key_words:
+                print(f"[DEBUG] Key words found: {key_words[:10]}")
         
         # Se rileva completamento o ripetizione, conta come segnale di fine
         return completion_detected or repetition_detected
@@ -931,16 +948,24 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 step_response += str(chunk)
             
             # Rileva se il progetto è completato
-            if self._detect_project_completion(step_response):
+            completion_detected = self._detect_project_completion(step_response)
+            print(f"[DEBUG] Cycle {self.total_cycles}: Completion detection = {completion_detected}")
+            print(f"[DEBUG] Response snippet for analysis: {step_response[:300]}...")
+            
+            if completion_detected:
                 self.consecutive_completion_signals += 1
+                print(f"[DEBUG] Consecutive completion signals: {self.consecutive_completion_signals}/{self.max_consecutive_completions}")
                 self.output_queue.put(f"[INFO]🔍 Rilevato segnale di completamento ({self.consecutive_completion_signals}/{self.max_consecutive_completions})")
                 
                 if self.consecutive_completion_signals >= self.max_consecutive_completions:
+                    print(f"[DEBUG] STOPPING LOOP: Reached max consecutive completions")
                     self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
                     self.is_running = False
                     break
             else:
                 # Reset counter se non rileva completamento
+                if self.consecutive_completion_signals > 0:
+                    print(f"[DEBUG] Resetting completion counter from {self.consecutive_completion_signals} to 0")
                 self.consecutive_completion_signals = 0
             
             # Resetta il feedback per il prossimo ciclo automatico
