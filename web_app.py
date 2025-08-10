@@ -3,28 +3,34 @@ import os
 import re
 import queue
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify, Response, make_response
-from core.orchestrator import Orchestrator, CONVERSATIONS_DIR, StatusEnum
 
-# FORCE debug logging initialization at web_app import time - WITH FILE OUTPUT
-import logging
+# FORCE debug logging initialization FIRST - before any other imports
 import sys
-log_file_path = os.path.expanduser('~/prometheus_debug.log')
-status_file = os.path.expanduser('~/prometheus_startup_status.txt')
+import logging
 
-# Force output to stderr to bypass Flask suppression
-sys.stderr.write("🐛 WEB_APP: FORCING Debug logging initialization...\n")
+# IMMEDIATE status file write to prove this code runs
+status_file = os.path.expanduser('~/prometheus_startup_status.txt')
+with open(status_file, 'w') as f:
+    f.write("🚀 WEB_APP IMPORT STARTED!!!\n")
+    f.write(f"Python executable: {sys.executable}\n")
+    f.write(f"Current working dir: {os.getcwd()}\n")
+
+sys.stderr.write("🚀 WEB_APP: MODULE IMPORT STARTED - THIS SHOULD APPEAR!!!\n")
 sys.stderr.flush()
 
-# Also write to a status file for verification
-with open(status_file, 'w') as f:
-    f.write("WEB_APP IMPORT STARTED\n")
-    f.write(f"Log file path: {log_file_path}\n")
+log_file_path = os.path.expanduser('~/prometheus_debug.log')
 
 try:
-    from core.orchestrator import Orchestrator
-    sys.stderr.write(f"🐛 WEB_APP: Log file path: {log_file_path}\n")
+    sys.stderr.write("🐛 WEB_APP: About to import Orchestrator...\n")
     sys.stderr.flush()
+    
+    from core.orchestrator import Orchestrator
+    
+    sys.stderr.write("✅ WEB_APP: Orchestrator imported successfully\n")
+    sys.stderr.flush()
+    
+    with open(status_file, 'a') as f:
+        f.write("✅ Orchestrator imported successfully\n")
     
     if os.path.exists(log_file_path):
         size = os.path.getsize(log_file_path)
@@ -34,33 +40,41 @@ try:
     else:
         sys.stderr.write("🔄 WEB_APP: Creating debug log file NOW...\n")
         sys.stderr.flush()
+        
         test_orchestrator = Orchestrator(session_id="test_webapp_import", lang='en')
+        
         sys.stderr.write("✅ WEB_APP: Orchestrator created successfully\n")
         sys.stderr.flush()
         
         with open(status_file, 'a') as f:
-            f.write("Orchestrator created\n")
+            f.write("Orchestrator instance created\n")
             
         if os.path.exists(log_file_path):
             size = os.path.getsize(log_file_path)
             sys.stderr.write(f"✅ WEB_APP: Debug log file CREATED with {size} bytes\n")
             with open(status_file, 'a') as f:
-                f.write(f"Log file created: {size} bytes\n")
+                f.write(f"SUCCESS: Log file created: {size} bytes\n")
         else:
             sys.stderr.write("❌ WEB_APP: Debug log file STILL NOT FOUND!\n")
             with open(status_file, 'a') as f:
-                f.write("ERROR: Log file not created\n")
-    
-    sys.stderr.write("-" * 30 + "\n")
-    sys.stderr.flush()
+                f.write("ERROR: Log file not created after orchestrator init\n")
+
 except Exception as e:
-    error_msg = f"❌ WEB_APP: EXCEPTION in debug logging: {e}\n"
+    error_msg = f"❌ WEB_APP: CRITICAL EXCEPTION: {e}\n"
     sys.stderr.write(error_msg)
     sys.stderr.flush()
+    
     with open(status_file, 'a') as f:
-        f.write(f"EXCEPTION: {e}\n")
+        f.write(f"CRITICAL EXCEPTION: {e}\n")
         import traceback
+        f.write("FULL TRACEBACK:\n")
         f.write(traceback.format_exc())
+
+sys.stderr.write("🏁 WEB_APP: Debug initialization completed\n")
+sys.stderr.flush()
+
+from flask import Flask, render_template, request, jsonify, Response, make_response
+from core.orchestrator import CONVERSATIONS_DIR, StatusEnum
 
 app = Flask(__name__)
 orchestrator_instances = {}
