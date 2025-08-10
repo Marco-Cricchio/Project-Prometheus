@@ -560,6 +560,25 @@ class Orchestrator:
         elif os.path.isdir(path):
             self.working_directory = os.path.abspath(path)
             debug_logger.info(f"Set working_directory to existing: {self.working_directory}")
+            
+            # SAFETY CHECK: Avvisa se la directory contiene file
+            try:
+                files_in_dir = []
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        rel_path = os.path.relpath(os.path.join(root, file), path)
+                        files_in_dir.append(rel_path)
+                
+                if files_in_dir:
+                    file_list = ', '.join(files_in_dir[:5])
+                    if len(files_in_dir) > 5:
+                        file_list += f" (e altri {len(files_in_dir)-5} file)"
+                    
+                    msg = f"⚠️ **ATTENZIONE:** Directory non vuota - contiene: {file_list}. Durante lo sviluppo potrei modificare file esistenti. Assicurati che questa sia la directory corretta!"
+                    return msg
+            except Exception:
+                pass
+            
             msg = PROMPTS[self.lang]["success_directory_exists"].format(path=self.working_directory)
             return msg
         else:
@@ -1007,7 +1026,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                         files_in_dir.append(rel_path)
             
             if files_in_dir:
-                user_feedback = f"CRITICAL: La directory contiene già questi file: {', '.join(files_in_dir)}. NON dire 'progetto già completo'. Analizza se questi file corrispondono esattamente ai requisiti del PRP attuale. Se NO, eliminali e ricrea. Se SÌ, verifica che funzionino correttamente. Inizia l'analisi."
+                user_feedback = f"CRITICAL: La directory contiene già questi file: {', '.join(files_in_dir)}. NON dire 'progetto già completo'. ANALIZZA il contenuto di questi file e confrontali con i requisiti del PRP attuale. Se NON corrispondono, avvisa l'utente del conflitto e chiedi come procedere. Se corrispondono, verifica che funzionino come da specifiche."
             else:
                 user_feedback = "Inizia il lavoro basandoti sul PRP. La directory è vuota."
         except Exception:
@@ -1178,10 +1197,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 "ANALIZZA L'ULTIMO OUTPUT DI CLAUDE E DECIDI IL PROSSIMO PASSO CON QUESTA LOGICA PRECISA:\n\n"
                 
                 "**DECISION TREE - LEGGI E SEGUI ESATTAMENTE:**\n"
-                "1️⃣ **SE DIRECTORY VUOTA/NESSUN FILE:** → Setup iniziale (package.json, struttura base)\n"
-                "2️⃣ **SE CI SONO FILE MA NON CORRISPONDONO AI NUOVI REQUISITI:** → Elimina file obsoleti e ricrea\n"
-                "3️⃣ **SE CI SONO FILE CHE SEMBRANO COMPLETI MA NUOVI REQUISITI:** → Verifica se corrispondono al PRP attuale, se no, sovrascrivi\n"
-                "4️⃣ **SE SETUP FATTO MA NO TESTING FRAMEWORK:** → Installa framework test\n"
+                "1️⃣ **SE DIRECTORY VUOTA:** → Setup iniziale appropriato per il framework scelto (package.json per JS, requirements.txt per Python, etc.)\n"
+                "2️⃣ **SE CI SONO FILE ESISTENTI:** → PRIMA analizza il contenuto e confronta con PRP. Se non corrispondono ai requisiti attuali, avvisa l'utente del conflitto\n"
+                "3️⃣ **SE FILE ESISTENTI SEMBRANO INCOMPLETI/DIVERSI:** → Chiedi conferma prima di modificare, poi implementa mancanti\n"
+                "4️⃣ **SE SETUP FATTO MA NO TESTING FRAMEWORK:** → Installa framework test appropriato\n"
                 "5️⃣ **SE FRAMEWORK TEST OK MA NO TEST FILES:** → RED PHASE (crea primo test che fallisce)\n"
                 "6️⃣ **SE TEST FALLISCONO (ERROR/FAILED):** → GREEN PHASE (implementa per far passare)\n"
                 "7️⃣ **SE TEST PASSANO (PASSED/SUCCESS):** → Prossimo RED PHASE (test per nuova feature)\n"
@@ -1189,8 +1208,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 "9️⃣ **SE CODICE FUNZIONA MA NON PULITO:** → REFACTOR PHASE (migliora qualità)\n\n"
                 
                 "**COMANDI SPECIFICI PER FASE:**\n"
-                "• **Setup:** `npm init -y` o `touch requirements.txt`\n"
-                "• **Test Framework:** `npm install --save-dev jest` o `pip install pytest`\n"
+                "• **Setup JS/Web:** `npm init -y` per Node.js, o direttamente HTML/CSS/JS per web vanilla\n"
+                "• **Setup Python:** `touch requirements.txt` o `pip freeze > requirements.txt`\n"
+                "• **Setup Other:** Adatta al framework del PRP (cargo init, composer init, etc.)\n"
+                "• **Test Framework:** Scegli appropriato (jest per JS, pytest per Python, etc.)\n"
                 "• **Run Test:** `npm test` o `python -m pytest` o `jest` o `pytest -v`\n"
                 "• **Create Files:** Usa prompt high-level per implementazioni\n\n"
                 
@@ -1208,8 +1229,9 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 "5. SE vedi errori → risolvili prima di continuare con TDD\n"
                 "6. **CRITICAL:** NON creare sottocartelle con il nome del progetto. La directory corrente è già la root.\n"
                 "7. **CRITICAL:** Tutti i file vanno nella directory corrente o in sottocartelle logiche (src/, tests/, etc.)\n"
-                "8. **CRITICAL ANTI-LOOP:** NEVER say 'progetto già completo' or 'already implemented' when files exist. ALWAYS check if they match current PRP requirements first.\n"
-                "9. **CRITICAL ANTI-LOOP:** If files exist but don't match PRP specs, overwrite them. If they do match, test them to verify functionality.\n\n"
+                "8. **SAFETY FIRST:** NEVER delete or overwrite files without explicit user permission when directory contains existing work\n"
+                "9. **CRITICAL ANTI-LOOP:** NEVER say 'progetto già completo' when files exist. ALWAYS analyze content vs current PRP requirements\n"
+                "10. **CONFLICT RESOLUTION:** If files exist but don't match PRP, inform user of conflict and ask for guidance\n\n"
                 
                 "**FORMATO OUTPUT:** \n"
                 "Rispondi SOLO con:\n"
