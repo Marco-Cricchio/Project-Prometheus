@@ -95,12 +95,20 @@ def chat():
         Questo generatore si mette in ascolto sulla coda dell'orchestratore
         e invia i dati al frontend non appena diventano disponibili.
         """
+        print(f"DEBUG: stream_from_queue iniziato per sessione {session_id}")
+        chunk_count = 0
         while True:
             # .get() è bloccante: aspetta finché non c'è un elemento nella coda
+            print(f"DEBUG: Aspettando chunk dalla coda...")
             chunk = orchestrator.output_queue.get()
+            chunk_count += 1
+            print(f"DEBUG: Ricevuto chunk {chunk_count}: {chunk[:100] if chunk else None}")
             if chunk is None: # 'None' è il nostro segnale per terminare lo stream
+                print(f"DEBUG: Stream terminato con segnale None")
                 break
+            print(f"DEBUG: Inviando chunk al frontend: {len(chunk) if chunk else 0} caratteri")
             yield chunk
+        print(f"DEBUG: stream_from_queue completato - {chunk_count} chunks totali")
             
     return Response(stream_from_queue(), mimetype='text/plain')
 

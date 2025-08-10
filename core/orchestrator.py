@@ -385,8 +385,45 @@ class Orchestrator:
             'too many requests', 'rate limit'
         ])
     
+    def _attempt_fallback_to_claude_for_brainstorming(self, error_type, prompt):
+        """Versione per brainstorming che restituisce messaggi invece di metterli nella coda."""
+        print(f"DEBUG: _attempt_fallback_to_claude_for_brainstorming chiamata con error_type: {error_type}")
+        
+        # Aggiorna lo stato del fallback
+        self.fallback_active = True
+        self.current_architect = 'claude'
+        self.fallback_reason = error_type
+        print(f"DEBUG: Stato fallback aggiornato - fallback_active: {self.fallback_active}")
+        
+        try:
+            # Messaggio di notifica del cambio
+            user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
+            print(f"DEBUG: Preparando messaggio utente: {user_message}")
+            
+            # Segnale di cambio architetto
+            architect_change_signal = "[ARCHITECT_CHANGE]claude"
+            print(f"DEBUG: Preparando segnale cambio architetto")
+            
+            print(f"DEBUG: Chiamando _run_claude_with_prompt...")
+            claude_response = _run_claude_with_prompt(prompt, timeout=180)
+            print(f"DEBUG: Claude ha risposto con: {len(claude_response) if claude_response else 0} caratteri")
+            
+            # Messaggio di successo
+            success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
+            print(f"DEBUG: Preparando messaggio di successo: {success_message}")
+            
+            # Combina tutti i messaggi per il brainstorming
+            combined_response = f"{user_message}\n{architect_change_signal}\n{claude_response}\n{success_message}"
+            return combined_response
+            
+        except Exception as claude_error:
+            print(f"DEBUG: Claude ha fallito con errore: {claude_error}")
+            # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
+            both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
+            raise Exception(both_failed_msg)
+
     def _attempt_fallback_to_claude(self, error_type, prompt):
-        """Tenta il fallback da Gemini a Claude."""
+        """Tenta il fallback da Gemini a Claude (versione originale per sviluppo)."""
         print(f"DEBUG: _attempt_fallback_to_claude chiamata con error_type: {error_type}")
         
         # Notifica l'utente del cambio
@@ -718,7 +755,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                     error_type = ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
                     try:
                         brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                        full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                        full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
                         print(f"DEBUG: Fallback forzato completato")
                         yield full_response
                     except Exception as fallback_error:
@@ -756,7 +793,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                         try:
                             # Fallback a Claude
                             brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                            full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                            full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
                             print(f"DEBUG: Fallback completato con successo")
                             yield full_response
                         except Exception as fallback_error:
