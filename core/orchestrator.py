@@ -12,13 +12,20 @@ import time
 import tempfile
 import logging
 
-# Setup debug logging to file
+# Setup debug logging to file in HOME directory (persists across git clones)
 debug_logger = logging.getLogger('prometheus_debug')
 debug_logger.setLevel(logging.DEBUG)
-debug_handler = logging.FileHandler('prometheus_debug.log')
+log_file_path = os.path.expanduser('~/prometheus_debug.log')
+debug_handler = logging.FileHandler(log_file_path)
 debug_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 debug_handler.setFormatter(debug_formatter)
 debug_logger.addHandler(debug_handler)
+
+# Log startup message to confirm logging is working
+debug_logger.info("="*50)
+debug_logger.info("PROMETHEUS DEBUG LOGGING STARTED")
+debug_logger.info(f"Log file location: {log_file_path}")
+debug_logger.info("="*50)
 
 # Gestione import Gemini con lazy loading
 class _GeminiImports:

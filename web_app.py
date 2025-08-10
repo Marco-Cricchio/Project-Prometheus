@@ -262,6 +262,7 @@ if __name__ == "__main__":
     print("\n🚀 Avvio Project Prometheus Web Server")
     print("📍 URL: http://localhost:5050")
     print("🔇 Log ridotti per una console pulita")
+    print("🐛 Debug logging attivo: ~/prometheus_debug.log")
     print("-" * 40)
     
     # Avviamo il server in modalità "threaded" per gestire correttamente
