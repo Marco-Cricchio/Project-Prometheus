@@ -173,10 +173,8 @@ class StatusEnum:
 
 def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
     """Helper per eseguire Claude con prompt lunghi via stdin"""
-    print(f"DEBUG: _run_claude_with_prompt chiamata - prompt length: {len(prompt_text)}, timeout: {timeout}")
     try:
         command_list = ["claude", "-p", "--dangerously-skip-permissions"]
-        print(f"DEBUG: Eseguendo comando: {' '.join(command_list)}")
         
         result = subprocess.run(
             command_list, 
@@ -189,28 +187,20 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
             encoding='utf-8'
         )
         
-        print(f"DEBUG: Claude comando completato - return code: {result.returncode}")
-        if result.stderr:
-            print(f"DEBUG: Claude stderr: {result.stderr}")
         
         if result.returncode != 0:
             error_msg = f"Errore: Claude command failed (code {result.returncode}): {result.stderr}"
-            print(f"DEBUG: Claude fallito: {error_msg}")
             return error_msg
         
-        print(f"DEBUG: Claude successo - response length: {len(result.stdout)}")
         return result.stdout.strip()
     except subprocess.TimeoutExpired:
         error_msg = f"Errore: Claude command timed out after {timeout} seconds"
-        print(f"DEBUG: Claude timeout: {error_msg}")
         return error_msg
     except FileNotFoundError:
         error_msg = "Errore: Claude CLI not found. Please install Claude Code CLI."
-        print(f"DEBUG: Claude CLI non trovato: {error_msg}")
         return error_msg
     except Exception as e:
         error_msg = f"Errore: Unexpected error: {e}"
-        print(f"DEBUG: Claude errore inaspettato: {error_msg}")
         return error_msg
 
 # I prompt ora sono multilingua
@@ -387,73 +377,60 @@ class Orchestrator:
     
     def _attempt_fallback_to_claude_for_brainstorming(self, error_type, prompt):
         """Versione per brainstorming che restituisce messaggi invece di metterli nella coda."""
-        print(f"DEBUG: _attempt_fallback_to_claude_for_brainstorming chiamata con error_type: {error_type}")
+        print(f"[TEMP DEBUG] _attempt_fallback_to_claude_for_brainstorming chiamato con error_type: {error_type}")
+        print(f"[TEMP DEBUG] Prompt length: {len(prompt)}")
+        print(f"[TEMP DEBUG] Current fallback_active: {getattr(self, 'fallback_active', 'Non definito')}")
         
         # Aggiorna lo stato del fallback
         self.fallback_active = True
         self.current_architect = 'claude'
         self.fallback_reason = error_type
-        print(f"DEBUG: Stato fallback aggiornato - fallback_active: {self.fallback_active}")
         
         try:
             # Messaggio di notifica del cambio
             user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
-            print(f"DEBUG: Preparando messaggio utente: {user_message}")
             
             # Segnale di cambio architetto
             architect_change_signal = "[ARCHITECT_CHANGE]claude"
-            print(f"DEBUG: Preparando segnale cambio architetto")
             
-            print(f"DEBUG: Chiamando _run_claude_with_prompt...")
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
-            print(f"DEBUG: Claude ha risposto con: {len(claude_response) if claude_response else 0} caratteri")
             
             # Messaggio di successo
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
-            print(f"DEBUG: Preparando messaggio di successo: {success_message}")
             
             # Combina tutti i messaggi per il brainstorming
             combined_response = f"{user_message}\n{architect_change_signal}\n{claude_response}\n{success_message}"
             return combined_response
             
         except Exception as claude_error:
-            print(f"DEBUG: Claude ha fallito con errore: {claude_error}")
             # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
             both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
             raise Exception(both_failed_msg)
 
     def _attempt_fallback_to_claude(self, error_type, prompt):
         """Tenta il fallback da Gemini a Claude (versione originale per sviluppo)."""
-        print(f"DEBUG: _attempt_fallback_to_claude chiamata con error_type: {error_type}")
         
         # Notifica l'utente del cambio
         user_message = ProviderErrorHandler.get_user_message(error_type, self.lang)
-        print(f"DEBUG: Inviando messaggio utente: {user_message}")
         self.output_queue.put(f"\n{user_message}\n")
         
         # Aggiorna lo stato del fallback
         self.fallback_active = True
         self.current_architect = 'claude'
         self.fallback_reason = error_type
-        print(f"DEBUG: Stato fallback aggiornato - fallback_active: {self.fallback_active}")
         
         # Invia segnale di cambio architetto al frontend
-        print(f"DEBUG: Inviando segnale cambio architetto")
         self.output_queue.put("[ARCHITECT_CHANGE]claude")
         
         try:
-            print(f"DEBUG: Chiamando _run_claude_with_prompt...")
             claude_response = _run_claude_with_prompt(prompt, timeout=180)
-            print(f"DEBUG: Claude ha risposto con: {len(claude_response) if claude_response else 0} caratteri")
             
             # Notifica successo del fallback
             success_message = ProviderErrorHandler.get_user_message('fallback_success', self.lang, 'Claude')
-            print(f"DEBUG: Inviando messaggio di successo: {success_message}")
             self.output_queue.put(f"{success_message}\n")
             
             return claude_response
         except Exception as claude_error:
-            print(f"DEBUG: Claude ha fallito con errore: {claude_error}")
             # Se anche Claude fallisce, entrambi i provider sono inutilizzabili
             both_failed_msg = ProviderErrorHandler.get_user_message('both_failed', self.lang)
             raise Exception(both_failed_msg)
@@ -748,29 +725,23 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             
             # Controlla se Gemini è selezionato ma non disponibile (API key invalida, ecc.)
             if self.architect_llm == 'gemini' and (_lazy_import_gemini() is False or self.chat_session is None):
-                print(f"DEBUG: Gemini selezionato ma non disponibile - lazy_import: {_lazy_import_gemini()}, chat_session: {self.chat_session}")
                 # Gemini è selezionato ma non disponibile - forza fallback
                 if not self.fallback_active:
-                    print(f"DEBUG: Forzando fallback per Gemini non disponibile")
                     error_type = ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
                     try:
                         brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                         full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
-                        print(f"DEBUG: Fallback forzato completato")
                         yield full_response
                     except Exception as fallback_error:
-                        print(f"DEBUG: Fallback forzato fallito: {fallback_error}")
                         yield f"Errore: {fallback_error}"
                         return
                 else:
-                    print(f"DEBUG: Fallback già attivo, usando Claude direttamente")
                     # Fallback già attivo, usa Claude direttamente
                     brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                     full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
                     yield full_response
             elif self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session is not None:
                 # Gemini con streaming
-                print(f"DEBUG: Tentando Gemini con chat_session disponibile")
                 try:
                     response_stream = self.chat_session.send_message(user_text, stream=True)
                     for chunk in response_stream:
@@ -780,34 +751,25 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                         except ValueError:
                             pass # Ignora i chunk vuoti
                 except Exception as gemini_error:
-                    print(f"DEBUG: Errore Gemini catturato: {gemini_error}")
                     # Rileva il tipo di errore e tenta fallback se appropriato
                     error_type = ProviderErrorHandler.detect_error_type(str(gemini_error))
-                    print(f"DEBUG: Tipo errore rilevato: {error_type}")
                     should_fallback = ProviderErrorHandler.should_attempt_fallback(error_type)
-                    print(f"DEBUG: Should attempt fallback: {should_fallback}")
-                    print(f"DEBUG: Fallback already active: {self.fallback_active}")
                     
                     if should_fallback and not self.fallback_active:
-                        print(f"DEBUG: Tentando fallback a Claude...")
                         try:
                             # Fallback a Claude
                             brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                             full_response = self._attempt_fallback_to_claude_for_brainstorming(error_type, brainstorm_prompt)
-                            print(f"DEBUG: Fallback completato con successo")
                             yield full_response
                         except Exception as fallback_error:
-                            print(f"DEBUG: Fallback fallito: {fallback_error}")
                             # Se anche il fallback fallisce
                             yield f"Errore: {fallback_error}"
                             return
                     else:
-                        print(f"DEBUG: Fallback non possibile - usando errore originale")
                         # Non è possibile il fallback o entrambi i provider hanno fallito
                         yield f"Errore: {gemini_error}"
                         return
             else:
-                print(f"DEBUG: Usando Claude - architect_llm: {self.architect_llm}")
                 # Claude (sia selezionato che fallback)
                 brainstorm_prompt = self._create_brainstorm_prompt(user_text)
                 full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
