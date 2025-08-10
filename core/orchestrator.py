@@ -256,9 +256,9 @@ class Orchestrator:
         
         # Completion detection per evitare loop infiniti
         self.consecutive_completion_signals = 0
-        self.max_consecutive_completions = 3  # Stop dopo 3 segnali consecutivi di completamento
+        self.max_consecutive_completions = 2  # Stop dopo 2 segnali consecutivi (più aggressivo)
         self.total_cycles = 0
-        self.max_total_cycles = 20  # Failsafe: stop dopo 20 cicli totali
+        self.max_total_cycles = 15  # Failsafe: stop dopo 15 cicli totali (ridotto)
         
         # FIX: Gestione stati per UI dinamica e recovery
         self.status = StatusEnum.IDLE
@@ -398,7 +398,7 @@ class Orchestrator:
             # Segnale di cambio architetto
             self.output_queue.put("[ARCHITECT_CHANGE]claude")
             
-            claude_response = _run_claude_with_prompt(prompt, timeout=180)
+            claude_response = _run_claude_with_prompt(prompt, self.working_directory, timeout=180)
             
             # Invia la risposta di Claude
             self.output_queue.put(claude_response)
@@ -758,7 +758,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 else:
                     # Fallback già attivo, usa Claude direttamente
                     brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                    full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
+                    full_response = _run_claude_with_prompt(brainstorm_prompt, self.working_directory, timeout=60)
                     yield full_response
             elif self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session is not None:
                 # Gemini con streaming
@@ -877,17 +877,36 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             "all features implemented"
         ]
         
-        # Rileva frasi di repetizione (indica loop)
+        # Rileva frasi di repetizione (indica loop) - AGGIORNATE
         repetition_phrases = [
             "the directory appears to be empty",
             "l'applicazione è già",
-            "è già implementata",
-            "already implemented", 
-            "già completamente implementata"
+            "è già implementata", 
+            "è già completa",
+            "già completa e funzionante",
+            "applicazione è già completa",
+            "already implemented",
+            "already complete", 
+            "già completamente implementata",
+            "progetto è pronto",
+            "tutto è implementato"
         ]
         
         completion_detected = any(phrase in response_lower for phrase in completion_phrases)
         repetition_detected = any(phrase in response_lower for phrase in repetition_phrases)
+        
+        # DEBUG: Log detection details
+        if completion_detected or repetition_detected:
+            matched_phrases = []
+            for phrase in completion_phrases:
+                if phrase in response_lower:
+                    matched_phrases.append(f"COMPLETION: {phrase}")
+            for phrase in repetition_phrases:
+                if phrase in response_lower:
+                    matched_phrases.append(f"REPETITION: {phrase}")
+            
+            print(f"[DEBUG] Completion detection triggered: {matched_phrases}")
+            print(f"[DEBUG] Response snippet: {response_lower[:200]}...")
         
         # Se rileva completamento o ripetizione, conta come segnale di fine
         return completion_detected or repetition_detected
