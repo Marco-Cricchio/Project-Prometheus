@@ -446,25 +446,62 @@
         
         /* TYPING INDICATOR */
         .typing-indicator {
-            padding: 15px;
-            background: var(--sidebar-bg);
-            border-radius: 20px;
+            padding: 15px 20px;
+            background: linear-gradient(135deg, var(--sidebar-bg), var(--main-bg-color));
+            border-radius: 25px;
             display: inline-block;
             margin: 10px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
         }
         .typing-indicator span {
             display: inline-block;
-            width: 8px; height: 8px;
+            width: 10px; 
+            height: 10px;
             border-radius: 50%;
-            background: var(--text-color);
-            margin: 0 2px;
-            animation: typing 1.4s infinite;
+            background: var(--status-running);
+            margin: 0 3px;
+            animation: typing-bounce 1.2s infinite ease-in-out;
+            box-shadow: 0 0 5px rgba(78, 205, 196, 0.3);
         }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); }
-            30% { transform: translateY(-15px); }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.15s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.3s; }
+        
+        @keyframes typing-bounce {
+            0%, 80%, 100% { 
+                transform: scale(0.8) translateY(0); 
+                opacity: 0.7;
+            }
+            40% { 
+                transform: scale(1.2) translateY(-12px); 
+                opacity: 1;
+            }
+        }
+        
+        /* ENHANCED TYPING INDICATOR CON TESTO */
+        .typing-indicator-enhanced {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            background: var(--main-bg-color);
+            border: 2px solid var(--status-running);
+            border-radius: 20px;
+            margin: 8px 0;
+            animation: pulse-border 2s infinite;
+        }
+        
+        .typing-indicator-text {
+            font-size: 12px;
+            color: var(--status-running);
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        
+        @keyframes pulse-border {
+            0%, 100% { border-color: var(--status-running); box-shadow: 0 0 5px rgba(78, 205, 196, 0.3); }
+            50% { border-color: var(--status-paused); box-shadow: 0 0 15px rgba(78, 205, 196, 0.6); }
         }
 
         /* DIRECTORY INSTRUCTION BOX */
@@ -1144,11 +1181,36 @@
                 return messageDiv;
             }
 
-            function addTypingIndicator() {
+            function addTypingIndicator(message = null, enhanced = false) {
+                // Rimuovi indicatore esistente
+                removeTypingIndicator();
+                
                 const div = document.createElement('div');
-                div.className = 'typing-indicator';
-                div.id = 'typing-indicator';
-                div.innerHTML = '<span></span><span></span><span></span>';
+                
+                if (enhanced && message) {
+                    // Indicatore avanzato con messaggio
+                    div.className = 'typing-indicator-enhanced';
+                    div.id = 'typing-indicator';
+                    div.innerHTML = `
+                        <span class="typing-indicator-text">${message}</span>
+                        <div class="typing-indicator">
+                            <span></span><span></span><span></span>
+                        </div>
+                    `;
+                } else {
+                    // Indicatore standard
+                    div.className = 'typing-indicator';
+                    div.id = 'typing-indicator';
+                    if (message) {
+                        div.innerHTML = `
+                            <span class="typing-indicator-text">${message}</span>
+                            <span></span><span></span><span></span>
+                        `;
+                    } else {
+                        div.innerHTML = '<span></span><span></span><span></span>';
+                    }
+                }
+                
                 chatWindow.appendChild(div);
                 chatWindow.scrollTop = chatWindow.scrollHeight;
                 return div;
@@ -1160,19 +1222,46 @@
             }
 
             // BUFFERED STREAMING
-            function appendToStream(markdownContent) {
+            function appendToStream(markdownContent, immediate = false) {
                 if (!currentStreamElement) {
                     currentStreamElement = addMessage('Prometheus');
                 }
                 
-                clearTimeout(streamBufferTimeout);
                 streamBuffer += markdownContent;
                 
-                streamBufferTimeout = setTimeout(() => {
+                if (immediate || !streamBufferTimeout) {
+                    // Rendering immediato per migliore reattività
+                    updateStreamContent();
+                    
+                    // Buffer solo per ottimizzazione se non immediato
+                    if (!immediate) {
+                        clearTimeout(streamBufferTimeout);
+                        streamBufferTimeout = setTimeout(() => {
+                            updateStreamContent();
+                            streamBufferTimeout = null;
+                        }, 8); // Ridotto ulteriormente per maggiore reattività
+                    }
+                } else {
+                    // Accumula nel buffer esistente
+                    clearTimeout(streamBufferTimeout);
+                    streamBufferTimeout = setTimeout(() => {
+                        updateStreamContent();
+                        streamBufferTimeout = null;
+                    }, 8);
+                }
+            }
+            
+            function updateStreamContent() {
+                if (currentStreamElement && streamBuffer) {
                     const contentDiv = currentStreamElement.querySelector('.message-content');
                     contentDiv.innerHTML = marked.parse(streamBuffer);
                     chatWindow.scrollTop = chatWindow.scrollHeight;
-                }, 16); // Ridotto a 16ms per evitare warning
+                    
+                    // Mostra typing indicator se il contenuto è breve (aspettiamo di più)
+                    if (streamBuffer.length < 50 && !document.getElementById('typing-indicator')) {
+                        addTypingIndicator('💭 Continuando...', false);
+                    }
+                }
             }
 
             // CONVERSATION HISTORY con cache per ridurre richieste
@@ -1538,6 +1627,13 @@
                 userInput.disabled = true;
                 updateSendButtonState(true);
                 
+                // Aggiungi typing indicator per feedback immediato
+                if (messageText.toUpperCase().includes('ACCENDI I MOTORI') || messageText.toUpperCase().includes('START THE ENGINES')) {
+                    addTypingIndicator('🚀 Avviando sistema di sviluppo...', true);
+                } else {
+                    addTypingIndicator('🤔 Analizzando la richiesta...', true);
+                }
+                
                 // Mostra il provider status quando inizia l'elaborazione
                 updateProviderStatus(currentArchitect, false);
 
@@ -1672,8 +1768,9 @@
                         // FUNZIONE PROCESSO SEGNALE SINGOLO
                         async function processSignal(signal) {
                             if (signal.type === 'content') {
-                                // Contenuto normale
-                                appendToStream(signal.data);
+                                // Contenuto normale - rendering più reattivo
+                                removeTypingIndicator(); // Rimuovi indicator quando arriva contenuto
+                                appendToStream(signal.data, true); // Rendering immediato per contenuto
                                 return;
                             }
                             
@@ -1700,6 +1797,13 @@
                                     const thinkingMsg = isDevelopmentPhase ? UI_TEXT[currentLang].developing : null;
                                     thinkingElement = addMessage('Prometheus', '', true, thinkingMsg);
                                     updateDevelopmentStatus('analyzing');
+                                    
+                                    // Aggiungi typing indicator specifico per la fase
+                                    if (isDevelopmentPhase) {
+                                        addTypingIndicator('⚙️ Analizzando prossimo step di sviluppo...', true);
+                                    } else {
+                                        addTypingIndicator('💭 Elaborando risposta...', true);
+                                    }
                                     break;
                                     
                                 case 'CLAUDE_PROMPT':
@@ -1711,7 +1815,8 @@
                                         showCommandExecution(promptText);
                                         updateDevelopmentStatus('executing');
                                     }
-                                    addTypingIndicator();
+                                    // Indicatore migliorato durante esecuzione comando
+                                    addTypingIndicator('🔄 Esecuzione comando in corso...', true);
                                     break;
                                     
                                 case 'CLAUDE_WORKING':
@@ -1720,7 +1825,8 @@
                                     if (workingText && workingText.length > 10) {
                                         addMessage('Prometheus', `🔧 **Risultato:**\n\n${workingText}`);
                                     }
-                                    addTypingIndicator();
+                                    // Indicatore per prossima azione
+                                    addTypingIndicator('⚙️ Elaborazione in corso...', true);
                                     updateDevelopmentStatus('working');
                                     updateDevStatus('Working', developmentSteps + 1);
                                     break;
