@@ -176,6 +176,10 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
     try:
         command_list = ["claude", "-p", "--dangerously-skip-permissions"]
         
+        # DEBUG: Log directory usage
+        print(f"[DEBUG] _run_claude_with_prompt called with working_dir: {working_dir}")
+        print(f"[DEBUG] Current working directory before subprocess: {os.getcwd()}")
+        
         result = subprocess.run(
             command_list, 
             input=prompt_text,
@@ -186,6 +190,12 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
             cwd=working_dir,
             encoding='utf-8'
         )
+        
+        print(f"[DEBUG] subprocess completed with returncode: {result.returncode}")
+        if working_dir:
+            print(f"[DEBUG] subprocess used cwd: {working_dir}")
+        else:
+            print(f"[DEBUG] WARNING: subprocess used current directory: {os.getcwd()}")
         
         
         if result.returncode != 0:
@@ -1161,6 +1171,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             # Esecuzione con Popen
             command_list = ["claude", "-p", "--dangerously-skip-permissions", gemini_prompt_for_claude]
             
+            # DEBUG: Log directory usage for Popen
+            print(f"[DEBUG] subprocess.Popen about to run with cwd: {self.working_directory}")
+            print(f"[DEBUG] Current working directory before Popen: {os.getcwd()}")
+            
             process = subprocess.Popen(
                 command_list,
                 stdout=subprocess.PIPE,
@@ -1169,6 +1183,8 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 encoding='utf-8',
                 cwd=self.working_directory
             )
+            
+            print(f"[DEBUG] subprocess.Popen started with pid: {process.pid}")
 
             yield "[CLAUDE_WORKING]" # Segnale di inizio lavoro per Claude
 
