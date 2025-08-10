@@ -3,7 +3,7 @@
 **An AI-powered autonomous development assistant that brings your ideas to life through intelligent brainstorming and automated TDD (Test-Driven Development) cycles.**
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.8+-green)
+![Python](https://img.shields.io/badge/python-3.9+-green)
 ![License](https://img.shields.io/badge/license-MPL%202.0%20+%20CLA-blue)
 
 ## ✨ Features
@@ -18,7 +18,7 @@
 ## 🚦 Quick Start (3 Steps!)
 
 ### Prerequisites
-- **Python 3.8+** (any version)
+- **Python 3.9+** (required by Google Gemini AI dependencies)
 - **Claude Code CLI** (for autonomous development) - [Install here](https://www.anthropic.com/claude-code)
 
 ### Installation
@@ -32,10 +32,18 @@
 
 2. **Alternative Installation** (if setup.py fails)
    ```bash
-   # Option A: Using pip directly
+   # Option A: Using UV (recommended)
+   uv venv
+   uv pip install -e .
+   
+   # Option B: Using Python virtual environment
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    pip install -r requirements.txt
    
-   # Option B: Manual dependency installation
+   # Option C: Manual dependency installation with virtual environment
+   python -m venv .venv
+   source .venv/bin/activate
    pip install flask python-dotenv rich google-generativeai
    ```
 
