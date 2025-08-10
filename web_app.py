@@ -81,11 +81,15 @@ def chat():
     session_id = data.get("session_id")
     lang = data.get("lang", 'en')
     architect_llm = data.get("architect", 'gemini')
+    tdd_mode = data.get("tdd_mode", True)  # Default: TDD abilitato
     
     if not user_input or not session_id:
         return jsonify({"error": "Input o session_id mancante"}), 400
     
     orchestrator = get_orchestrator(session_id, lang, architect_llm)
+    
+    # Aggiorna modalità TDD nell'orchestrator
+    orchestrator.tdd_mode = tdd_mode
     
     # Questa chiamata è ora non-bloccante. Elabora l'input e potrebbe
     # avviare il thread di sviluppo in background.

@@ -247,6 +247,7 @@ class Orchestrator:
         self.lang = lang if lang in PROMPTS else 'en'
         self.architect_llm = architect_llm
         self.working_directory = None
+        self.tdd_mode = True  # Default: TDD abilitato
         
         # Nuovi attributi per il ciclo autonomo
         self.dev_thread = None
@@ -550,6 +551,7 @@ class Orchestrator:
             "project_plan": self.project_plan,
             "lang": self.lang,
             "architect_llm": self.architect_llm,
+            "tdd_mode": getattr(self, 'tdd_mode', True),
             "working_directory": self.working_directory,
             "gemini_history": gemini_history_serializable,
             "display_history": self.conversation_history,
@@ -587,6 +589,7 @@ class Orchestrator:
             self.mode = state["mode"]
             self.project_plan = state.get("project_plan")
             self.lang = state.get("lang", "en")
+            self.tdd_mode = state.get("tdd_mode", True)  # Default: TDD abilitato
             # NON sovrascrivere l'architetto selezionato dall'utente
             self.architect_llm = user_selected_architect  # MANTIENI LA SELEZIONE UTENTE
             self.working_directory = state.get("working_directory")
@@ -797,7 +800,6 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             return
 
         self.mode = "DEVELOPMENT"
-        self.output_queue.put("[DEBUG]Modalità sviluppo attivata, creando PRP...")
         
         try:
             # Crea il Piano di Progetto (PRP)
@@ -810,9 +812,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             )
             
             # FIX: Usa l'architetto selezionato anche per il PRP
-            self.output_queue.put("[DEBUG]Chiamando architetto per generare PRP...")
             prp_response = self._get_architect_response(prp_prompt)
-            self.output_queue.put("[DEBUG]PRP generato correttamente, avviando thread...")
             self.project_plan = prp_response
             
             # MODIFICA: Invia il PRP come un blocco unico per una corretta renderizzazione
@@ -904,9 +904,35 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             return
         
         try:
-            # Preparare il prompt per l'architetto con context-awareness MIGLIORATO
+            # Preparare il prompt per l'architetto con metodologia appropriata
+            if self.tdd_mode:
+                # MODALITÀ TDD: Cicli Red-Green-Refactor
+                methodology_prompt = (
+                    f"Sei l'ARCHITETTO TDD per questo progetto. Segui rigorosamente il ciclo Red-Green-Refactor.\n\n"
+                    f"**METODOLOGIA TDD:**\n"
+                    f"1. **RED PHASE:** Crea test che falliscono\n"
+                    f"2. **GREEN PHASE:** Implementa codice minimo per far passare i test\n"
+                    f"3. **REFACTOR PHASE:** Migliora il codice mantenendo i test verdi\n\n"
+                    f"**ANALISI FASE TDD ATTUALE:**\n"
+                    f"5. **Fase TDD Attuale:** RED (test falliti), GREEN (implementare), o REFACTOR (migliorare)\n"
+                )
+            else:
+                # MODALITÀ CLASSICA: Sviluppo diretto senza TDD
+                methodology_prompt = (
+                    f"Sei l'ARCHITETTO per questo progetto. Segui un approccio di sviluppo diretto e pragmatico.\n\n"
+                    f"**METODOLOGIA CLASSICA:**\n"
+                    f"1. **ANALISI:** Comprendi il requirement\n"
+                    f"2. **IMPLEMENTAZIONE:** Crea direttamente il codice funzionante\n"
+                    f"3. **VERIFICA:** Testa manualmente o con esempi semplici\n"
+                    f"4. **ITERAZIONE:** Migliora basandoti sui feedback\n\n"
+                    f"**FOCUS SVILUPPO CLASSICO:**\n"
+                    f"- Priorità su funzionalità rapidamente utilizzabili\n"
+                    f"- Codice semplice e diretto\n"
+                    f"- Testing opzionale o di verifica finale\n"
+                )
+            
             dev_prompt_context = (
-                f"Sei l'ARCHITETTO TDD per questo progetto. Analizza ATTENTAMENTE il contesto e guida lo sviluppo.\n\n"
+                methodology_prompt +
                 f"**PIANO DI PROGETTO (PRP):**\n---\n{self.project_plan}\n---\n\n"
                 f"**CRONOLOGIA AZIONI COMPLETA:**\n---\n{self.conversation_history}\n---\n\n"
                 f"**DIRECTORY LAVORO:** {self.working_directory}\n"
@@ -916,10 +942,9 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 f"**ANALISI OBBLIGATORIA - LEGGI ATTENTAMENTE L'ULTIMO OUTPUT:**\n"
                 f"Prima di decidere, analizza ESATTAMENTE cosa è successo nell'ultima azione:\n"
                 f"1. **Files Esistenti:** Quali file sono stati creati/modificati nell'ultima azione?\n"
-                f"2. **Test Status:** I test sono stati eseguiti? Sono passati o falliti?\n"
+                f"2. **Status Generale:** Cosa è stato completato nell'ultima azione?\n"
                 f"3. **Errori:** Ci sono stati errori di compilazione, import, o esecuzione?\n"
                 f"4. **Output Specifico:** Leggi l'ultimo output di Claude per capire cosa è stato fatto\n"
-                f"5. **Fase TDD Attuale:** RED (test falliti), GREEN (implementare), o REFACTOR (migliorare)\n\n"
             )
             
             if user_feedback and user_feedback.strip():

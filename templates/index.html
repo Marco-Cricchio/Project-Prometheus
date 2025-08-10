@@ -191,6 +191,75 @@
             color: var(--text-color);
             font-family: inherit;
         }
+
+        /* TDD TOGGLE SWITCH */
+        #tdd-toggle-container {
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--main-bg-color);
+        }
+        
+        #tdd-toggle-container label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-color);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: var(--status-running);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .tdd-info {
+            font-size: 10px;
+            color: var(--muted-color);
+            margin-top: 5px;
+            line-height: 1.3;
+        }
         
         /* CONVERSATION LIST CON PALLINI DI STATO */
         #conversation-list { 
@@ -549,6 +618,21 @@
                 </select>
             </div>
             
+            <div id="tdd-toggle-container">
+                <label for="tdd-toggle" id="tdd-label">⚙️ Metodologia Sviluppo:</label>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span style="font-size: 11px; color: var(--muted-color);">Classico</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="tdd-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 11px; color: var(--text-color); font-weight: 500;">TDD</span>
+                </div>
+                <div class="tdd-info" id="tdd-info">
+                    🧪 TDD: Test-Driven Development per sviluppo robusto e affidabile
+                </div>
+            </div>
+            
             <ul id="conversation-list"></ul>
             <div id="sidebar-controls" style="margin-top: auto;">
                 <button id="theme-toggle-btn" class="sidebar-btn">🌙 Tema</button>
@@ -614,6 +698,8 @@
             const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
             const directoryInstructionBox = document.getElementById('directory-instruction-box');
             const architectSelect = document.getElementById('architect-select');
+            const tddToggle = document.getElementById('tdd-toggle');
+            const tddInfo = document.getElementById('tdd-info');
             const mainLayout = document.getElementById('main-layout');
             const toastContainer = document.getElementById('toast-container');
             const progressBar = document.getElementById('progress-bar');
@@ -628,6 +714,7 @@
             let currentSessionId = null;
             let currentLang = localStorage.getItem('lang') || 'it';
             let currentArchitect = localStorage.getItem('architect') || 'gemini';
+            let currentTddMode = localStorage.getItem('tddMode') !== 'false'; // Default: true
             let workingDirectorySet = false;
             let currentStreamElement = null;
             let statusUpdateInterval = null;
@@ -646,6 +733,9 @@
                     themeBtn: '🌙 Theme',
                     langBtn: '🌐 EN',
                     architectLabel: '🏗️ Architect:',
+                    tddLabel: '⚙️ Development Method:',
+                    tddInfo: '🧪 TDD: Test-Driven Development for robust and reliable development',
+                    tddClassic: 'Classic',
                     headerSubtitle: 'Write "START THE ENGINES!" to begin development from the agreed plan.',
                     inputPlaceholder: 'Write your message... (Shift+Enter for new line)',
                     thinking: 'Thinking...',
@@ -672,6 +762,9 @@
                     themeBtn: '🌙 Tema',
                     langBtn: '🌐 IT',
                     architectLabel: '🏗️ Architetto:',
+                    tddLabel: '⚙️ Metodologia Sviluppo:',
+                    tddInfo: '🧪 TDD: Test-Driven Development per sviluppo robusto e affidabile',
+                    tddClassic: 'Classico',
                     headerSubtitle: 'Scrivi "ACCENDI I MOTORI!" per avviare lo sviluppo dal piano concordato.',
                     inputPlaceholder: 'Scrivi il tuo messaggio... (Shift+Invio per nuova riga)',
                     thinking: 'Sto pensando...',
@@ -877,6 +970,11 @@
                 document.getElementById('theme-toggle-btn').innerHTML = text.themeBtn;
                 document.getElementById('lang-toggle-btn').innerHTML = text.langBtn;
                 document.getElementById('architect-label').textContent = text.architectLabel;
+                document.getElementById('tdd-label').textContent = text.tddLabel;
+                // Aggiorna testo TDD in base al toggle attuale
+                tddInfo.textContent = currentTddMode 
+                    ? text.tddInfo
+                    : `🚀 ${text.tddClassic}: Sviluppo diretto senza cicli TDD`;
                 document.getElementById('header-subtitle').textContent = text.headerSubtitle;
                 document.getElementById('user-input').placeholder = text.inputPlaceholder;
                 document.getElementById('sidebar-toggle-btn').title = text.sidebarToggle;
@@ -949,6 +1047,13 @@
 
             // ARCHITECT SELECT
             architectSelect.value = currentArchitect;
+            
+            // TDD TOGGLE INITIALIZATION
+            tddToggle.checked = currentTddMode;
+            tddInfo.textContent = currentTddMode 
+                ? UI_TEXT[currentLang].tddInfo
+                : `🚀 ${UI_TEXT[currentLang].tddClassic}: Sviluppo diretto senza cicli TDD`;
+            
             architectSelect.addEventListener('change', () => {
                 currentArchitect = architectSelect.value;
                 localStorage.setItem('architect', currentArchitect);
@@ -958,6 +1063,21 @@
                 if (providerStatus.classList.contains('active')) {
                     updateProviderStatus(currentArchitect, false);
                 }
+            });
+
+            // TDD TOGGLE
+            tddToggle.addEventListener('change', () => {
+                currentTddMode = tddToggle.checked;
+                localStorage.setItem('tddMode', currentTddMode);
+                
+                // Aggiorna testo informativo
+                tddInfo.textContent = currentTddMode 
+                    ? UI_TEXT[currentLang].tddInfo
+                    : `🚀 ${UI_TEXT[currentLang].tddClassic}: Sviluppo diretto senza cicli TDD`;
+                
+                // Toast di notifica
+                const modeText = currentTddMode ? 'TDD' : UI_TEXT[currentLang].tddClassic;
+                showToast(`Metodologia sviluppo: ${modeText}`, 'info');
             });
 
             // THEME TOGGLE
@@ -1462,7 +1582,8 @@
                                 message: messageText, 
                                 session_id: currentSessionId, 
                                 lang: currentLang,
-                                architect: currentArchitect
+                                architect: currentArchitect,
+                                tdd_mode: currentTddMode
                             }),
                             signal: currentAbortController.signal
                         });
@@ -1478,6 +1599,7 @@
                         streamBuffer = '';
                         let thinkingElement = null;
                         let chunkCount = 0;
+                        let isDevelopmentPhase = false;
 
                         while (true) {
                             const { value, done } = await reader.read();
@@ -1488,44 +1610,153 @@
                             
                             let chunk = decoder.decode(value, { stream: true });
                             
-                            // Sistema di feedback visivo avanzato
-                            const processedSignals = new Set();
-                            let remainingChunk = chunk;
+                            // NUOVO PARSER ROBUSTO: Separa segnali multipli
+                            const signals = parseMultipleSignals(chunk);
                             
-                            // Gestione segnali speciali di sistema
-                            if (chunk === '[KEEPALIVE]') {
-                                updateConnectionStatus('connected');
-                                continue;
+                            // Processa ogni segnale individualmente
+                            for (const signal of signals) {
+                                await processSignal(signal);
+                            }
+                        }
+                        
+                        // FUNZIONE PARSER SEGNALI MULTIPLI
+                        function parseMultipleSignals(chunk) {
+                            const signals = [];
+                            const signalPattern = /\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|DEBUG|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE|ERROR|KEEPALIVE|STREAM_END)\]/g;
+                            
+                            let lastIndex = 0;
+                            let match;
+                            
+                            // Se non ci sono segnali, tratta come contenuto normale
+                            if (!signalPattern.test(chunk)) {
+                                return [{ type: 'content', data: chunk }];
                             }
                             
-                            if (chunk === '[STREAM_END]') {
-                                updateConnectionStatus('completed');
-                                break;
-                            }
+                            // Reset regex
+                            signalPattern.lastIndex = 0;
                             
-                            if (chunk.startsWith('[ERROR]')) {
-                                const errorMsg = chunk.replace('[ERROR]', '').trim();
-                                showToast(`Errore: ${errorMsg}`, 'error');
-                                addMessage('System', `❌ ${errorMsg}`);
-                                continue;
-                            }
-                            
-                            // 1. Processa messaggi di fallback
-                            if (remainingChunk.includes('🔑 Chiave API non configurata')) {
-                                const keyMessage = remainingChunk.match(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\./);
-                                if (keyMessage && !processedSignals.has('fallback-message')) {
-                                    addMessage('System', keyMessage[0]);
-                                    processedSignals.add('fallback-message');
-                                    remainingChunk = remainingChunk.replace(keyMessage[0], '');
+                            while ((match = signalPattern.exec(chunk)) !== null) {
+                                // Aggiungi contenuto prima del segnale (se presente)
+                                if (match.index > lastIndex) {
+                                    const content = chunk.substring(lastIndex, match.index).trim();
+                                    if (content) {
+                                        signals.push({ type: 'content', data: content });
+                                    }
+                                }
+                                
+                                // Trova la fine di questo segnale (inizio del prossimo o fine stringa)
+                                const nextMatch = signalPattern.exec(chunk);
+                                const endIndex = nextMatch ? nextMatch.index : chunk.length;
+                                signalPattern.lastIndex = match.index + match[0].length; // Reset per prossima iterazione
+                                
+                                const signalContent = chunk.substring(match.index, endIndex);
+                                signals.push({ type: 'signal', signal: match[1], data: signalContent });
+                                
+                                lastIndex = endIndex;
+                                if (nextMatch) {
+                                    signalPattern.lastIndex = nextMatch.index; // Riposiziona per il prossimo
                                 }
                             }
                             
-                            // 2. Processa segnale cambio architetto
-                            if (remainingChunk.includes('[ARCHITECT_CHANGE]')) {
-                                const architectMatch = remainingChunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
-                                if (architectMatch && !processedSignals.has('architect-change')) {
-                                    const newArchitect = architectMatch[1];
+                            // Aggiungi contenuto finale (se presente)
+                            if (lastIndex < chunk.length) {
+                                const content = chunk.substring(lastIndex).trim();
+                                if (content) {
+                                    signals.push({ type: 'content', data: content });
+                                }
+                            }
+                            
+                            return signals;
+                        }
+                        
+                        // FUNZIONE PROCESSO SEGNALE SINGOLO
+                        async function processSignal(signal) {
+                            if (signal.type === 'content') {
+                                // Contenuto normale
+                                appendToStream(signal.data);
+                                return;
+                            }
+                            
+                            // Segnali speciali
+                            const { signal: signalType, data } = signal;
+                            
+                            switch (signalType) {
+                                case 'KEEPALIVE':
+                                    updateConnectionStatus('connected');
+                                    break;
                                     
+                                case 'STREAM_END':
+                                    updateConnectionStatus('completed');
+                                    return 'END';
+                                    
+                                case 'ERROR':
+                                    const errorMsg = data.replace('[ERROR]', '').trim();
+                                    showToast(`Errore: ${errorMsg}`, 'error');
+                                    addMessage('System', `❌ ${errorMsg}`);
+                                    break;
+                                    
+                                case 'THINKING':
+                                    removeTypingIndicator();
+                                    const thinkingMsg = isDevelopmentPhase ? UI_TEXT[currentLang].developing : null;
+                                    thinkingElement = addMessage('Prometheus', '', true, thinkingMsg);
+                                    updateDevelopmentStatus('analyzing');
+                                    break;
+                                    
+                                case 'CLAUDE_PROMPT':
+                                    if (thinkingElement) thinkingElement.remove();
+                                    const promptText = data.replace('[CLAUDE_PROMPT]', '').trim();
+                                    if (promptText) {
+                                        const formattedMessage = `⚡ **Comando in esecuzione**\n\n\`\`\`\n${promptText}\n\`\`\``;
+                                        addMessage('Prometheus', formattedMessage);
+                                        showCommandExecution(promptText);
+                                        updateDevelopmentStatus('executing');
+                                    }
+                                    addTypingIndicator();
+                                    break;
+                                    
+                                case 'CLAUDE_WORKING':
+                                    removeTypingIndicator();
+                                    const workingText = data.replace('[CLAUDE_WORKING]', '').trim();
+                                    if (workingText && workingText.length > 10) {
+                                        addMessage('Prometheus', `🔧 **Risultato:**\n\n${workingText}`);
+                                    }
+                                    addTypingIndicator();
+                                    updateDevelopmentStatus('working');
+                                    updateDevStatus('Working', developmentSteps + 1);
+                                    break;
+                                    
+                                case 'CYCLE_COMPLETE':
+                                    removeTypingIndicator();
+                                    developmentSteps++;
+                                    updateDevStatus('Running', developmentSteps);
+                                    updateDevelopmentStatus('completed');
+                                    const cleanChunk = data.replace('[CYCLE_COMPLETE]', '').trim();
+                                    if (cleanChunk) {
+                                        addMessage('Prometheus', cleanChunk);
+                                    }
+                                    updateProgress((developmentSteps % 10) * 10);
+                                    showToast(`🎯 Ciclo ${developmentSteps} completato con successo!`, 'success');
+                                    break;
+                                    
+                                case 'DEBUG':
+                                    // Debug rimosso - ignorato
+                                    break;
+                                    
+                                case 'INFO':
+                                    removeTypingIndicator();
+                                    const infoText = data.replace('[INFO]', '').trim();
+                                    if (infoText) {
+                                        addMessage('System', infoText);
+                                        if (infoText.includes('pausa')) {
+                                            updateDevStatus('Paused', developmentSteps);
+                                            showToast('Ciclo in pausa', 'warning');
+                                        }
+                                    }
+                                    break;
+                                    
+                                case 'ARCHITECT_CHANGE':
+                                    const architectMatch = data.match(/\[ARCHITECT_CHANGE\](\w+)/);
+                                    const newArchitect = architectMatch ? architectMatch[1] : '';
                                     if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
                                         architectSelect.value = newArchitect;
                                         currentArchitect = newArchitect;
@@ -1538,170 +1769,13 @@
                                             : `Architect automatically changed to: ${architectName}`;
                                         showToast(message, 'warning', 4000);
                                     }
-                                    
-                                    processedSignals.add('architect-change');
-                                    remainingChunk = remainingChunk.replace(architectMatch[0], '');
-                                }
+                                    break;
                             }
                             
-                            // 3. Processa messaggio di successo
-                            if (remainingChunk.includes('✅ Passaggio completato')) {
-                                const successMessage = remainingChunk.match(/✅ Passaggio completato.*?con Claude\./);
-                                if (successMessage && !processedSignals.has('success-message')) {
-                                    addMessage('System', successMessage[0]);
-                                    processedSignals.add('success-message');
-                                    remainingChunk = remainingChunk.replace(successMessage[0], '');
-                                }
-                            }
-                            
-                            // 4. Il contenuto rimanente è la risposta di Claude
-                            remainingChunk = remainingChunk.trim();
-                            if (remainingChunk && !processedSignals.has('claude-response')) {
-                                appendToStream(remainingChunk);
-                                processedSignals.add('claude-response');
-                            }
-                            
-                            // Skip il resto del parsing se abbiamo già processato tutto
-                            if (processedSignals.size > 0) {
-                                continue;
-                            }
-                            
-                            // Rileva se siamo in fase di sviluppo
-                            if (chunk.includes('ACCENDI I MOTORI') || chunk.includes('START THE ENGINES') || 
-                                chunk.includes('[CLAUDE_PROMPT]') || chunk.includes('[CLAUDE_WORKING]')) {
-                                isDevelopmentPhase = true;
-                            }
-                            
-                            // Parse signals con feedback visivo avanzato
-                            if (chunk.includes('[THINKING]')) {
-                                removeTypingIndicator();
-                                const thinkingMsg = isDevelopmentPhase ? UI_TEXT[currentLang].developing : null;
-                                thinkingElement = addMessage('Prometheus', '', true, thinkingMsg);
-                                updateDevelopmentStatus('analyzing');
-                            } else if (chunk.includes('[CLAUDE_PROMPT]')) {
-                                if (thinkingElement) thinkingElement.remove();
-                                const promptText = chunk.replace('[CLAUDE_PROMPT]', '').trim();
-                                if (promptText) {
-                                    // Migliora la formattazione del comando
-                                    const formattedMessage = `⚡ **Comando in esecuzione**\n\n\`\`\`\n${promptText}\n\`\`\``;
-                                    addMessage('Prometheus', formattedMessage);
-                                    showCommandExecution(promptText);
-                                    updateDevelopmentStatus('executing');
-                                }
-                                addTypingIndicator();
-                            } else if (chunk.includes('[CLAUDE_WORKING]')) {
-                                removeTypingIndicator();
-                                const workingText = chunk.replace('[CLAUDE_WORKING]', '').trim();
-                                if (workingText && workingText.length > 10) {
-                                    // Mostra solo risultati significativi, non messaggi brevi
-                                    addMessage('Prometheus', `🔧 **Risultato:**\n\n${workingText}`);
-                                }
-                                addTypingIndicator();
-                                updateDevelopmentStatus('working');
-                                updateDevStatus('Working', developmentSteps + 1);
-                            } else if (chunk.includes('[INFO]')) {
-                                removeTypingIndicator();
-                                const infoText = chunk.replace('[INFO]', '').trim();
-                                if (infoText) {
-                                    addMessage('System', infoText);
-                                    if (infoText.includes('pausa')) {
-                                        updateDevStatus('Paused', developmentSteps);
-                                        showToast('Ciclo in pausa', 'warning');
-                                    }
-                                }
-                            } else if (chunk.includes('[DEBUG]')) {
-                                // Debug temporaneo per diagnosticare problema
-                                const debugText = chunk.replace('[DEBUG]', '').trim();
-                                console.log('🐛 DEBUG:', debugText);
-                                addMessage('System', `🐛 DEBUG: ${debugText}`);
-                            } else if (chunk.includes('[CYCLE_COMPLETE]')) {
-                                removeTypingIndicator();
-                                developmentSteps++;
-                                updateDevStatus('Running', developmentSteps);
-                                updateDevelopmentStatus('completed');
-                                const cleanChunk = chunk.replace('[CYCLE_COMPLETE]', '').trim();
-                                if (cleanChunk) {
-                                    addMessage('Prometheus', cleanChunk);
-                                }
-                                updateProgress((developmentSteps % 10) * 10);
-                                showToast(`🎯 Ciclo ${developmentSteps} completato con successo!`, 'success');
-                            } else if (chunk.includes('[STEP_SUCCESS]')) {
-                                // Skip this signal
-                            } else if (chunk.includes('🔑 Chiave API non configurata') || chunk.includes('✅ Passaggio completato')) {
-                                // Estrai solo i messaggi di stato
-                                const fallbackMessages = [];
-                                if (chunk.includes('🔑 Chiave API non configurata')) {
-                                    const keyMessage = chunk.match(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\./);
-                                    if (keyMessage) fallbackMessages.push(keyMessage[0]);
-                                }
-                                if (chunk.includes('✅ Passaggio completato')) {
-                                    const successMessage = chunk.match(/✅ Passaggio completato.*?con Claude\./);
-                                    if (successMessage) fallbackMessages.push(successMessage[0]);
-                                }
-                                
-                                // Mostra i messaggi di fallback
-                                fallbackMessages.forEach(msg => {
-                                    addMessage('System', msg);
-                                });
-                            } else if (chunk.includes('[ARCHITECT_CHANGE]')) {
-                                // Estrae il nome dell'architetto dal segnale usando regex
-                                const architectMatch = chunk.match(/\[ARCHITECT_CHANGE\](\w+)/);
-                                const newArchitect = architectMatch ? architectMatch[1] : '';
-                                if (newArchitect && (newArchitect === 'claude' || newArchitect === 'gemini')) {
-                                    // Aggiorna il dropdown dell'architetto
-                                    architectSelect.value = newArchitect;
-                                    currentArchitect = newArchitect;
-                                    localStorage.setItem('architect', newArchitect);
-                                    
-                                    // Aggiorna il provider status con l'indicazione di fallback
-                                    updateProviderStatus(newArchitect, true);
-                                    
-                                    // Mostra toast di notifica
-                                    const architectName = newArchitect === 'claude' ? 'Claude' : 'Gemini';
-                                    const message = currentLang === 'it' 
-                                        ? `Architetto cambiato automaticamente: ${architectName}`
-                                        : `Architect automatically changed to: ${architectName}`;
-                                    showToast(message, 'warning', 4000);
-                                }
-                            } else if (!chunk.match(/\[(THINKING|CLAUDE_PROMPT|CLAUDE_WORKING|INFO|DEBUG|CYCLE_COMPLETE|STEP_SUCCESS|ARCHITECT_CHANGE)\]/)) {
-                                // Rimuovi eventuali segnali di controllo dal chunk prima di visualizzare
-                                let cleanChunk = chunk;
-                                
-                                // Rimuovi i messaggi di fallback che sono già stati processati
-                                cleanChunk = cleanChunk.replace(/🔑 Chiave API non configurata.*?senza interruzioni\.\.\.\n*/g, '');
-                                cleanChunk = cleanChunk.replace(/✅ Passaggio completato.*?con Claude\.\n*/g, '');
-                                cleanChunk = cleanChunk.replace(/\[ARCHITECT_CHANGE\]\w+/g, '');
-                                cleanChunk = cleanChunk.trim();
-                                
-                                if (!cleanChunk) {
-                                    continue;
-                                }
-                                if (thinkingElement) {
-                                    thinkingElement.remove();
-                                    thinkingElement = null;
-                                }
-                                removeTypingIndicator();
-                                
-                                // Intercetta messaggi di fallback provider
-                                if (chunk.includes('🔄') || chunk.includes('⚡') || chunk.includes('⏳')) {
-                                    // Rileva cambio provider dai messaggi emoji
-                                    if (chunk.includes('Claude')) {
-                                        updateProviderStatus('claude', true);
-                                    } else if (chunk.includes('Gemini')) {
-                                        updateProviderStatus('gemini', true);
-                                    }
-                                } else if (chunk.includes('✅') && chunk.includes('continua con')) {
-                                    // Conferma di successo del fallback
-                                    if (chunk.includes('Claude')) {
-                                        updateProviderStatus('claude', true);
-                                    } else if (chunk.includes('Gemini')) {
-                                        updateProviderStatus('gemini', true);
-                                    }
-                                }
-                                
-                                appendToStream(cleanChunk);
-                            }
+                            return null; // Continue processing
                         }
+                        
+                        // ✅ Sistema completamente refactorizzato - parsing ora gestito da parseMultipleSignals() e processSignal()
                         
                         removeTypingIndicator();
                         if (thinkingElement) thinkingElement.remove();
