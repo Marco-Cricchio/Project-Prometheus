@@ -743,9 +743,13 @@ class Orchestrator:
         # CRITICAL FIX: Salva sempre la sessione dopo aver aggiunto input utente
         self.save_state(verbose=False)
         
-        # FIX: Trigger più flessibile per avviare lo sviluppo
-        trigger_phrases = ["accendi i motori", "inizia sviluppo", "avvia sviluppo", "start development", 
-                          "implementa", "sviluppa", "crea l'app", "build it", "let's code", "iniziamo"]
+        # FIX: Trigger specifici e inequivocabili per avviare lo sviluppo
+        trigger_phrases = [
+            "accendi i motori", "inizia sviluppo", "avvia sviluppo", "start development",
+            "iniziamo a implementare", "ora implementa", "crea l'app ora", "build it now", 
+            "let's code", "iniziamo l'implementazione", "procedi con l'implementazione",
+            "develop it", "create the app", "implement it", "code it", "make it happen"
+        ]
         
         user_text_lower = user_text.lower()
         should_start_dev = any(phrase in user_text_lower for phrase in trigger_phrases)
