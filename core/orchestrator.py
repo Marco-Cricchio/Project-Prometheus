@@ -10,6 +10,15 @@ import threading
 import queue
 import time
 import tempfile
+import logging
+
+# Setup debug logging to file
+debug_logger = logging.getLogger('prometheus_debug')
+debug_logger.setLevel(logging.DEBUG)
+debug_handler = logging.FileHandler('prometheus_debug.log')
+debug_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+debug_handler.setFormatter(debug_formatter)
+debug_logger.addHandler(debug_handler)
 
 # Gestione import Gemini con lazy loading
 class _GeminiImports:
@@ -177,8 +186,8 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
         command_list = ["claude", "-p", "--dangerously-skip-permissions"]
         
         # DEBUG: Log directory usage
-        print(f"[DEBUG] _run_claude_with_prompt called with working_dir: {working_dir}")
-        print(f"[DEBUG] Current working directory before subprocess: {os.getcwd()}")
+        debug_logger.info(f"_run_claude_with_prompt called with working_dir: {working_dir}")
+        debug_logger.info(f"Current working directory before subprocess: {os.getcwd()}")
         
         result = subprocess.run(
             command_list, 
@@ -191,11 +200,11 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
             encoding='utf-8'
         )
         
-        print(f"[DEBUG] subprocess completed with returncode: {result.returncode}")
+        debug_logger.info(f"subprocess completed with returncode: {result.returncode}")
         if working_dir:
-            print(f"[DEBUG] subprocess used cwd: {working_dir}")
+            debug_logger.info(f"subprocess used cwd: {working_dir}")
         else:
-            print(f"[DEBUG] WARNING: subprocess used current directory: {os.getcwd()}")
+            debug_logger.warning(f"WARNING: subprocess used current directory: {os.getcwd()}")
         
         
         if result.returncode != 0:
@@ -525,21 +534,29 @@ class Orchestrator:
 
     def set_working_directory(self, path_from_ui):
         """Nuova funzione per validare e impostare la directory di lavoro."""
+        debug_logger.info(f"set_working_directory called with: {path_from_ui}")
+        
         path = os.path.expanduser(path_from_ui.strip())
+        debug_logger.info(f"Expanded path: {path}")
+        
         if not os.path.exists(path):
             try:
                 os.makedirs(path, exist_ok=True)
                 self.working_directory = os.path.abspath(path)
+                debug_logger.info(f"Created and set working_directory to: {self.working_directory}")
                 msg = PROMPTS[self.lang]["success_directory_created"].format(path=self.working_directory)
                 return msg
             except Exception as e:
+                debug_logger.error(f"Failed to create directory {path}: {e}")
                 error_msg = PROMPTS[self.lang]["error_create_directory"].format(error=e)
                 return error_msg
         elif os.path.isdir(path):
             self.working_directory = os.path.abspath(path)
+            debug_logger.info(f"Set working_directory to existing: {self.working_directory}")
             msg = PROMPTS[self.lang]["success_directory_exists"].format(path=self.working_directory)
             return msg
         else:
+            debug_logger.error(f"Path is not a directory: {path}")
             error_msg = PROMPTS[self.lang]["error_not_directory"]
             return error_msg
 
@@ -939,14 +956,14 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 matched_phrases.append(f"REPETITION: {phrase}")
         
         if completion_detected or repetition_detected:
-            print(f"[DEBUG] ✅ DETECTION TRIGGERED: {matched_phrases}")
-            print(f"[DEBUG] Response snippet: {response_lower[:200]}...")
+            debug_logger.info(f"✅ DETECTION TRIGGERED: {matched_phrases}")
+            debug_logger.info(f"Response snippet: {response_lower[:200]}...")
         else:
-            print(f"[DEBUG] ❌ No completion detected in response")
+            debug_logger.info(f"❌ No completion detected in response")
             # Mostra alcune parole chiave per debug
             key_words = [word for word in response_lower.split() if any(target in word for target in ['completo', 'complete', 'già', 'already', 'esistere', 'exists'])]
             if key_words:
-                print(f"[DEBUG] Key words found: {key_words[:10]}")
+                debug_logger.info(f"Key words found: {key_words[:10]}")
         
         # Se rileva completamento o ripetizione, conta come segnale di fine
         return completion_detected or repetition_detected
@@ -972,23 +989,23 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             
             # Rileva se il progetto è completato
             completion_detected = self._detect_project_completion(step_response)
-            print(f"[DEBUG] Cycle {self.total_cycles}: Completion detection = {completion_detected}")
-            print(f"[DEBUG] Response snippet for analysis: {step_response[:300]}...")
+            debug_logger.info(f"Cycle {self.total_cycles}: Completion detection = {completion_detected}")
+            debug_logger.info(f"Response snippet for analysis: {step_response[:300]}...")
             
             if completion_detected:
                 self.consecutive_completion_signals += 1
-                print(f"[DEBUG] Consecutive completion signals: {self.consecutive_completion_signals}/{self.max_consecutive_completions}")
+                debug_logger.info(f"Consecutive completion signals: {self.consecutive_completion_signals}/{self.max_consecutive_completions}")
                 self.output_queue.put(f"[INFO]🔍 Rilevato segnale di completamento ({self.consecutive_completion_signals}/{self.max_consecutive_completions})")
                 
                 if self.consecutive_completion_signals >= self.max_consecutive_completions:
-                    print(f"[DEBUG] STOPPING LOOP: Reached max consecutive completions")
+                    debug_logger.info(f"STOPPING LOOP: Reached max consecutive completions")
                     self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
                     self.is_running = False
                     break
             else:
                 # Reset counter se non rileva completamento
                 if self.consecutive_completion_signals > 0:
-                    print(f"[DEBUG] Resetting completion counter from {self.consecutive_completion_signals} to 0")
+                    debug_logger.info(f"Resetting completion counter from {self.consecutive_completion_signals} to 0")
                 self.consecutive_completion_signals = 0
             
             # Resetta il feedback per il prossimo ciclo automatico
@@ -1172,8 +1189,8 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             command_list = ["claude", "-p", "--dangerously-skip-permissions", gemini_prompt_for_claude]
             
             # DEBUG: Log directory usage for Popen
-            print(f"[DEBUG] subprocess.Popen about to run with cwd: {self.working_directory}")
-            print(f"[DEBUG] Current working directory before Popen: {os.getcwd()}")
+            debug_logger.info(f"subprocess.Popen about to run with cwd: {self.working_directory}")
+            debug_logger.info(f"Current working directory before Popen: {os.getcwd()}")
             
             process = subprocess.Popen(
                 command_list,
@@ -1184,7 +1201,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 cwd=self.working_directory
             )
             
-            print(f"[DEBUG] subprocess.Popen started with pid: {process.pid}")
+            debug_logger.info(f"subprocess.Popen started with pid: {process.pid}")
 
             yield "[CLAUDE_WORKING]" # Segnale di inizio lavoro per Claude
 
