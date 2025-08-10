@@ -91,23 +91,23 @@ def check_uv_installed():
 
 
 def check_claude_cli():
-    """Check if Claude CLI is available"""
-    print_step("Checking for Claude CLI...")
+    """Check if Claude Code CLI is available"""
+    print_step("Checking for Claude Code CLI...")
     
     if shutil.which("claude") is None:
-        print_warning("Claude CLI not found!")
-        print("Claude CLI is required for the autonomous development features.")
-        print("Please install it from: https://claude.ai/cli")
+        print_warning("Claude Code CLI not found!")
+        print("Claude Code CLI is required for the autonomous development features.")
+        print("Please install it from: https://www.anthropic.com/claude-code")
         print("")
         
-        response = input("Continue setup without Claude CLI? (y/N): ").strip().lower()
+        response = input("Continue setup without Claude Code CLI? (y/N): ").strip().lower()
         if response not in ['y', 'yes']:
-            print("Setup cancelled. Please install Claude CLI first.")
+            print("Setup cancelled. Please install Claude Code CLI first.")
             sys.exit(1)
         
-        print_warning("Continuing without Claude CLI (limited functionality)")
+        print_warning("Continuing without Claude Code CLI (limited functionality)")
     else:
-        print_success("Claude CLI found!")
+        print_success("Claude Code CLI found!")
 
 
 def setup_virtual_environment():

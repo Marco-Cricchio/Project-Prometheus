@@ -98,9 +98,9 @@ class PrometheusLauncher:
         """Check optional components and provide guidance"""
         warnings = []
         
-        # Check Claude CLI
+        # Check Claude Code CLI
         if not shutil.which("claude"):
-            warnings.append("Claude CLI not found - autonomous development will be limited")
+            warnings.append("Claude Code CLI not found - autonomous development will be limited")
         
         # Check .env file
         if not self.env_file.exists():

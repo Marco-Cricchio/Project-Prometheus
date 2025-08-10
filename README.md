@@ -19,7 +19,7 @@
 
 ### Prerequisites
 - **Python 3.8+** (any version)
-- **Claude CLI** (for autonomous development) - [Install here](https://claude.ai/cli)
+- **Claude Code CLI** (for autonomous development) - [Install here](https://www.anthropic.com/claude-code)
 
 ### Installation
 
@@ -109,7 +109,7 @@ MAX_CONVERSATION_HISTORY=100
 
 ### API Keys Setup
 1. **Gemini**: Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. **Claude**: Install [Claude CLI](https://claude.ai/cli) and authenticate
+2. **Claude**: Install [Claude Code CLI](https://www.anthropic.com/claude-code) and authenticate
 
 ## 🛠️ Advanced Usage
 
@@ -142,8 +142,8 @@ black .
 
 ### Common Issues
 
-**"Claude CLI not found"**
-- Install from: https://claude.ai/cli
+**"Claude Code CLI not found"**
+- Install from: https://www.anthropic.com/claude-code
 - Ensure it's in your PATH
 
 **"UV not found"**
@@ -223,7 +223,7 @@ This project is licensed under **Mozilla Public License 2.0 + Contributor Licens
 
 ## 🙏 Acknowledgments
 
-- **Anthropic** for Claude AI and CLI tools
+- **Anthropic** for Claude AI and Claude Code CLI tools
 - **Google** for Gemini AI capabilities  
 - **Astral** for the UV package manager
 - The open-source community for inspiration and tools
