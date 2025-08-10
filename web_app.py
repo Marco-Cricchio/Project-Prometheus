@@ -6,6 +6,15 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, make_response
 from core.orchestrator import Orchestrator, CONVERSATIONS_DIR, StatusEnum
 
+# Force logging initialization by importing
+import logging
+log_file_path = os.path.expanduser('~/prometheus_debug.log')
+print(f"🐛 Checking debug log file: {log_file_path}")
+if os.path.exists(log_file_path):
+    print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
+else:
+    print("❌ Debug log file not found - will be created on first orchestrator use")
+
 app = Flask(__name__)
 orchestrator_instances = {}
 
@@ -263,6 +272,15 @@ if __name__ == "__main__":
     print("📍 URL: http://localhost:5050")
     print("🔇 Log ridotti per una console pulita")
     print("🐛 Debug logging attivo: ~/prometheus_debug.log")
+    
+    # Test logging initialization
+    print("🧪 Testing debug log initialization...")
+    try:
+        test_orchestrator = Orchestrator(session_id="test_logging", lang='en')
+        print("✅ Orchestrator created successfully - debug log should be active")
+    except Exception as e:
+        print(f"❌ Error creating test orchestrator: {e}")
+    
     print("-" * 40)
     
     # Avviamo il server in modalità "threaded" per gestire correttamente
