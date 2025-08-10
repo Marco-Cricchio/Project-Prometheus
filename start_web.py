@@ -31,36 +31,35 @@ def main():
     print("⏹️  Press Ctrl+C to stop the server")
     print("-" * 50)
     
-    # Debug environment details
+    # Debug environment details - SEMPRE
     print(f"🔧 Current Python: {sys.executable}")
     print(f"🔧 Virtual env path: {venv_python}")  
     print(f"🔧 Already in venv: {already_in_venv}")
+    print("-" * 20)
     
-    # Initialize debug logging (should run after venv switch)
-    if already_in_venv or not venv_python.exists():
-        print("🐛 Debug logging attivo: ~/prometheus_debug.log")
-        print("🧪 Testing debug log initialization...")
+    # FORCE debug logging SEMPRE - no conditions
+    print("🐛 FORCING Debug logging initialization...")
+    try:
+        from core.orchestrator import Orchestrator
+        log_file_path = os.path.expanduser('~/prometheus_debug.log')
+        print(f"🐛 Log file path: {log_file_path}")
         
-        try:
-            # Force orchestrator import to create log file
-            from core.orchestrator import Orchestrator
-            log_file_path = os.path.expanduser('~/prometheus_debug.log')
-            
+        if os.path.exists(log_file_path):
+            print(f"✅ Debug log file EXISTS with {os.path.getsize(log_file_path)} bytes")
+        else:
+            print("🔄 Creating debug log file NOW...")
+            test_orchestrator = Orchestrator(session_id="test_startup_force", lang='en')
+            print("✅ Orchestrator created successfully")
             if os.path.exists(log_file_path):
-                print(f"✅ Debug log file exists and has {os.path.getsize(log_file_path)} bytes")
+                print(f"✅ Debug log file CREATED with {os.path.getsize(log_file_path)} bytes")
             else:
-                print("🔄 Creating debug log file...")
-                test_orchestrator = Orchestrator(session_id="test_startup", lang='en')
-                print("✅ Orchestrator created successfully - debug log should be active")
-                if os.path.exists(log_file_path):
-                    print(f"✅ Debug log file created with {os.path.getsize(log_file_path)} bytes")
-            
-            print("-" * 30)
-        except Exception as e:
-            print(f"❌ Error initializing debug logging: {e}")
-            print("-" * 30)
-    else:
-        print("🔄 Will initialize debug logging after venv switch...")
+                print("❌ Debug log file STILL NOT FOUND after orchestrator creation!")
+        
+        print("-" * 30)
+    except Exception as e:
+        print(f"❌ EXCEPTION in debug logging: {e}")
+        import traceback
+        traceback.print_exc()
         print("-" * 30)
     
     try:
