@@ -431,20 +431,29 @@ class Orchestrator:
     def _setup_initial_chat_session(self):
         # Solo inizializza Gemini se è l'architetto selezionato e disponibile
         if self.architect_llm == 'gemini' and _lazy_import_gemini():
-            # --- CONFIGURAZIONE DI GENERAZIONE PER GEMINI ---
-            self.generation_config = _gemini.GenerationConfig(
-                max_output_tokens=65536,
-                temperature=0.7,  # Un po' di creatività per il brainstorming
-            )
+            try:
+                # --- CONFIGURAZIONE DI GENERAZIONE PER GEMINI ---
+                self.generation_config = _gemini.GenerationConfig(
+                    max_output_tokens=65536,
+                    temperature=0.7,  # Un po' di creatività per il brainstorming
+                )
 
-            system_instruction = PROMPTS[self.lang]["system_instruction"]
-            
-            self.model = _gemini.genai.GenerativeModel(
-                model_name='gemini-2.5-pro', 
-                system_instruction=system_instruction,
-                generation_config=self.generation_config
-            )
-            self.chat_session = self.model.start_chat(history=[])
+                system_instruction = PROMPTS[self.lang]["system_instruction"]
+                
+                self.model = _gemini.genai.GenerativeModel(
+                    model_name='gemini-2.5-pro', 
+                    system_instruction=system_instruction,
+                    generation_config=self.generation_config
+                )
+                self.chat_session = self.model.start_chat(history=[])
+            except Exception as e:
+                # Se l'inizializzazione di Gemini fallisce (es. API key invalida)
+                # impostiamo tutto su None e il sistema userà Claude come fallback
+                print(f"Warning: Gemini initialization failed: {e}")
+                self.model = None
+                self.chat_session = None
+                self.generation_config = None
+                # Non forziamo il fallback qui, lo faremo quando necessario
         else:
             # Per Claude o quando Gemini non è disponibile, non inizializziamo Gemini
             self.model = None
@@ -674,7 +683,24 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         try:
             full_response = ""
             
-            if self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session:
+            # Controlla se Gemini è selezionato ma non disponibile (API key invalida, ecc.)
+            if self.architect_llm == 'gemini' and (_lazy_import_gemini() is False or self.chat_session is None):
+                # Gemini è selezionato ma non disponibile - forza fallback
+                if not self.fallback_active:
+                    error_type = ProviderErrorHandler.ERROR_TYPES['API_KEY_INVALID']
+                    try:
+                        brainstorm_prompt = self._create_brainstorm_prompt(user_text)
+                        full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                        yield full_response
+                    except Exception as fallback_error:
+                        yield f"Errore: {fallback_error}"
+                        return
+                else:
+                    # Fallback già attivo, usa Claude direttamente
+                    brainstorm_prompt = self._create_brainstorm_prompt(user_text)
+                    full_response = _run_claude_with_prompt(brainstorm_prompt, timeout=60)
+                    yield full_response
+            elif self.architect_llm == 'gemini' and _lazy_import_gemini() and self.chat_session is not None:
                 # Gemini con streaming
                 try:
                     response_stream = self.chat_session.send_message(user_text, stream=True)
@@ -688,10 +714,15 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                     # Rileva il tipo di errore e tenta fallback se appropriato
                     error_type = ProviderErrorHandler.detect_error_type(str(gemini_error))
                     if ProviderErrorHandler.should_attempt_fallback(error_type) and not self.fallback_active:
-                        # Fallback a Claude
-                        brainstorm_prompt = self._create_brainstorm_prompt(user_text)
-                        full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
-                        yield full_response
+                        try:
+                            # Fallback a Claude
+                            brainstorm_prompt = self._create_brainstorm_prompt(user_text)
+                            full_response = self._attempt_fallback_to_claude(error_type, brainstorm_prompt)
+                            yield full_response
+                        except Exception as fallback_error:
+                            # Se anche il fallback fallisce
+                            yield f"Errore: {fallback_error}"
+                            return
                     else:
                         # Non è possibile il fallback o entrambi i provider hanno fallito
                         yield f"Errore: {gemini_error}"
