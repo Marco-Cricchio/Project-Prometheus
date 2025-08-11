@@ -552,8 +552,8 @@
             gap: 10px; 
         }
         #user-input { 
-            flex: 1;
-            width: 0; /* Force flex to work */
+            flex: 1 1 auto;
+            max-width: calc(100% - 60px); /* Leave space for button */
             background-color: var(--sidebar-bg); 
             color: var(--text-color); 
             border: 1px solid var(--border-color); 
