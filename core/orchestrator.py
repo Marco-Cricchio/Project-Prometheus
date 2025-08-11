@@ -187,14 +187,31 @@ class StatusEnum:
     ERROR = "ERROR"
     COMPLETED = "COMPLETED"
 
-def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
-    """Helper per eseguire Claude con prompt lunghi via stdin"""
+def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60, retry_count=0, max_retries=3):
+    """
+    Helper per eseguire Claude con prompt lunghi via stdin con retry intelligente e timeout progressivi.
+    
+    Args:
+        prompt_text: Il prompt da inviare a Claude
+        working_dir: Directory di lavoro
+        timeout: Timeout iniziale (60s -> 120s -> 300s)
+        retry_count: Numero retry corrente
+        max_retries: Massimo numero di retry
+    """
+    
+    # Timeout progressivi: 60s -> 120s -> 300s
+    timeout_levels = [60, 120, 300]
+    current_timeout = timeout_levels[min(retry_count, len(timeout_levels) - 1)]
+    
+    # Enhanced logging con metrics
+    start_time = time.time()
+    debug_logger.info(f"=== CLAUDE CLI EXECUTION START ===")
+    debug_logger.info(f"Retry: {retry_count}/{max_retries}, Timeout: {current_timeout}s")
+    debug_logger.info(f"Working dir: {working_dir}")
+    debug_logger.info(f"Prompt length: {len(prompt_text)} characters")
+    
     try:
         command_list = ["claude", "-p", "--dangerously-skip-permissions"]
-        
-        # DEBUG: Log directory usage
-        debug_logger.info(f"_run_claude_with_prompt called with working_dir: {working_dir}")
-        debug_logger.info(f"Current working directory before subprocess: {os.getcwd()}")
         
         result = subprocess.run(
             command_list, 
@@ -202,32 +219,96 @@ def _run_claude_with_prompt(prompt_text, working_dir=None, timeout=60):
             capture_output=True, 
             text=True, 
             check=False, 
-            timeout=timeout,
+            timeout=current_timeout,
             cwd=working_dir,
             encoding='utf-8'
         )
         
-        debug_logger.info(f"subprocess completed with returncode: {result.returncode}")
-        if working_dir:
-            debug_logger.info(f"subprocess used cwd: {working_dir}")
-        else:
-            debug_logger.warning(f"WARNING: subprocess used current directory: {os.getcwd()}")
-        
+        execution_time = time.time() - start_time
+        debug_logger.info(f"Claude CLI completed in {execution_time:.2f}s")
+        debug_logger.info(f"Return code: {result.returncode}")
         
         if result.returncode != 0:
             error_msg = f"Errore: Claude command failed (code {result.returncode}): {result.stderr}"
+            debug_logger.error(f"Claude CLI error: {error_msg}")
+            
+            # Classificazione errori per retry logic
+            error_type = _classify_claude_error(result.stderr, result.returncode)
+            debug_logger.info(f"Error classified as: {error_type}")
+            
+            # Retry solo per errori temporanei
+            if error_type == "temporary" and retry_count < max_retries:
+                debug_logger.info(f"Retrying due to temporary error...")
+                return _retry_claude_with_backoff(prompt_text, working_dir, current_timeout, retry_count, max_retries)
+            
             return error_msg
         
+        debug_logger.info(f"Claude CLI successful - Output length: {len(result.stdout)} characters")
         return result.stdout.strip()
+        
     except subprocess.TimeoutExpired:
-        error_msg = f"Errore: Claude command timed out after {timeout} seconds"
+        execution_time = time.time() - start_time
+        error_msg = f"Errore: Claude command timed out after {current_timeout} seconds"
+        debug_logger.error(f"Claude CLI timeout after {execution_time:.2f}s")
+        
+        # Retry con timeout maggiore
+        if retry_count < max_retries:
+            debug_logger.info(f"Retrying with increased timeout...")
+            return _retry_claude_with_backoff(prompt_text, working_dir, current_timeout, retry_count, max_retries)
+        
         return error_msg
+        
     except FileNotFoundError:
         error_msg = "Errore: Claude CLI not found. Please install Claude Code CLI."
+        debug_logger.error("Claude CLI not found")
         return error_msg
+        
     except Exception as e:
+        execution_time = time.time() - start_time
         error_msg = f"Errore: Unexpected error: {e}"
+        debug_logger.error(f"Unexpected error after {execution_time:.2f}s: {e}")
         return error_msg
+
+
+def _classify_claude_error(stderr_output, return_code):
+    """Classifica gli errori di Claude per determinare se vale la pena riprovare."""
+    stderr_lower = stderr_output.lower() if stderr_output else ""
+    
+    # Errori temporanei (vale la pena riprovare)
+    temporary_indicators = [
+        "timeout", "connection", "network", "rate limit", 
+        "temporarily", "try again", "server error", "503", "502", "504"
+    ]
+    
+    # Errori permanenti (non vale la pena riprovare)  
+    permanent_indicators = [
+        "permission", "not found", "invalid", "authentication",
+        "forbidden", "401", "403", "400"
+    ]
+    
+    for indicator in temporary_indicators:
+        if indicator in stderr_lower:
+            return "temporary"
+            
+    for indicator in permanent_indicators:
+        if indicator in stderr_lower:
+            return "permanent"
+    
+    # Default: considera temporaneo per sicurezza
+    return "temporary"
+
+
+def _retry_claude_with_backoff(prompt_text, working_dir, timeout, retry_count, max_retries):
+    """Implementa retry con backoff exponenziale."""
+    retry_count += 1
+    
+    # Backoff exponenziale: 1s, 2s, 4s
+    backoff_time = 2 ** (retry_count - 1)
+    debug_logger.info(f"Waiting {backoff_time}s before retry {retry_count}/{max_retries}")
+    
+    time.sleep(backoff_time)
+    
+    return _run_claude_with_prompt(prompt_text, working_dir, timeout, retry_count, max_retries)
 
 # I prompt ora sono multilingua
 PROMPTS = {
@@ -1136,6 +1217,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 if self.consecutive_completion_signals >= self.max_consecutive_completions:
                     debug_logger.info(f"STOPPING LOOP: Reached max consecutive completions")
                     self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
+                    self._cleanup_checkpoint()  # Cleanup su completion successful
                     self.is_running = False
                     break
             else:
@@ -1161,12 +1243,22 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         """Ciclo di sviluppo che inizia con feedback specifico dall'utente."""
         user_feedback = initial_feedback
         
+        # Try to load checkpoint for resume capability
+        checkpoint_loaded = self._load_checkpoint()
+        if checkpoint_loaded:
+            self.output_queue.put("[INFO]📋 Checkpoint trovato - riprendo da operazioni precedenti")
+        
         while self.is_running:
             self.total_cycles += 1
+            
+            # Salva checkpoint ogni 2-3 operazioni per resume capability
+            if self.total_cycles % 3 == 0:
+                self._save_checkpoint()
             
             # Failsafe: stop dopo troppi cicli
             if self.total_cycles > self.max_total_cycles:
                 self.output_queue.put(f"[INFO]🛑 Interrotto automaticamente dopo {self.max_total_cycles} cicli per evitare loop infinito.")
+                self._cleanup_checkpoint()  # Cleanup su stop
                 self.is_running = False
                 break
             
@@ -1198,6 +1290,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 if self.consecutive_completion_signals >= self.max_consecutive_completions:
                     debug_logger.info(f"STOPPING LOOP: Reached max consecutive completions")
                     self.output_queue.put("[INFO]✅ Progetto completato! Ciclo di sviluppo terminato automaticamente.")
+                    self._cleanup_checkpoint()  # Cleanup su completion successful
                     self.is_running = False
                     break
             else:
@@ -1257,6 +1350,112 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         
         self.output_queue.put("[INFO]Ciclo di sviluppo recovery terminato.")
         self.output_queue.put(None)
+
+    def _create_batch_operations_prompt(self, operations_list):
+        """
+        Crea un prompt ottimizzato per eseguire multiple operazioni in batch.
+        Riduce il numero di chiamate API raggruppando operazioni simili.
+        """
+        if len(operations_list) <= 1:
+            return operations_list[0] if operations_list else ""
+            
+        debug_logger.info(f"Creating batch prompt for {len(operations_list)} operations")
+        
+        batch_prompt = f"""
+BATCH OPERATIONS MODE: Esegui le seguenti operazioni in sequenza efficiente.
+Per ogni operazione, fornisci una breve conferma di completamento.
+
+OPERAZIONI DA ESEGUIRE:
+"""
+        for i, operation in enumerate(operations_list, 1):
+            batch_prompt += f"\n{i}. {operation}"
+        
+        batch_prompt += f"""
+
+ISTRUZIONI BATCH:
+- Esegui tutte le operazioni sopra in sequenza
+- Segnala brevemente il completamento di ogni operazione
+- Se un'operazione fallisce, continua con le successive
+- Alla fine fornisci un riepilogo di ciò che è stato completato
+"""
+        
+        return batch_prompt
+
+    def _save_checkpoint(self):
+        """
+        Salva un checkpoint dello stato corrente per permettere resume operations.
+        """
+        try:
+            checkpoint_data = {
+                "timestamp": datetime.now().isoformat(),
+                "session_id": self.session_id,
+                "mode": self.mode,
+                "status": self.status.value if hasattr(self.status, 'value') else str(self.status),
+                "working_directory": self.working_directory,
+                "total_cycles": self.total_cycles,
+                "consecutive_completion_signals": self.consecutive_completion_signals,
+                "tdd_mode": self.tdd_mode,
+                "project_plan": self.project_plan,
+                "conversation_history": self.conversation_history[-10:],  # Solo ultime 10 entries
+                "architect_llm": self.architect_llm,
+                "current_architect": self.current_architect,
+                "fallback_active": self.fallback_active
+            }
+            
+            checkpoint_path = os.path.join(os.path.dirname(self.working_directory or "."), f"checkpoint_{self.session_id}.json")
+            with open(checkpoint_path, 'w', encoding='utf-8') as f:
+                json.dump(checkpoint_data, f, ensure_ascii=False, indent=2)
+                
+            debug_logger.info(f"Checkpoint saved: {checkpoint_path}")
+            return True
+            
+        except Exception as e:
+            debug_logger.error(f"Failed to save checkpoint: {e}")
+            return False
+
+    def _load_checkpoint(self, checkpoint_path=None):
+        """
+        Carica un checkpoint salvato per resume operations.
+        """
+        try:
+            if not checkpoint_path:
+                checkpoint_path = os.path.join(os.path.dirname(self.working_directory or "."), f"checkpoint_{self.session_id}.json")
+            
+            if not os.path.exists(checkpoint_path):
+                debug_logger.info("No checkpoint found")
+                return False
+                
+            with open(checkpoint_path, 'r', encoding='utf-8') as f:
+                checkpoint_data = json.load(f)
+            
+            # Restore state from checkpoint
+            self.total_cycles = checkpoint_data.get("total_cycles", 0)
+            self.consecutive_completion_signals = checkpoint_data.get("consecutive_completion_signals", 0)
+            self.tdd_mode = checkpoint_data.get("tdd_mode", True)
+            self.architect_llm = checkpoint_data.get("architect_llm", "gemini")
+            self.current_architect = checkpoint_data.get("current_architect", self.architect_llm)
+            self.fallback_active = checkpoint_data.get("fallback_active", False)
+            
+            debug_logger.info(f"Checkpoint loaded from: {checkpoint_path}")
+            debug_logger.info(f"Resumed at cycle: {self.total_cycles}")
+            
+            return True
+            
+        except Exception as e:
+            debug_logger.error(f"Failed to load checkpoint: {e}")
+            return False
+
+    def _cleanup_checkpoint(self):
+        """
+        Rimuove il checkpoint dopo completamento successful.
+        """
+        try:
+            checkpoint_path = os.path.join(os.path.dirname(self.working_directory or "."), f"checkpoint_{self.session_id}.json")
+            if os.path.exists(checkpoint_path):
+                os.remove(checkpoint_path)
+                debug_logger.info("Checkpoint cleaned up")
+        except Exception as e:
+            debug_logger.error(f"Failed to cleanup checkpoint: {e}")
 
     def handle_development_step(self, user_feedback=None):
         """Esegue UN singolo passo del ciclo di sviluppo."""
