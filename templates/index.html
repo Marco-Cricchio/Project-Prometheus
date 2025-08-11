@@ -1749,7 +1749,7 @@
 
                 try {
                     if (!workingDirectorySet) {
-                        // Se non c'è una sessione corrente, creane una prima
+                        // Se siamo in una nuova conversazione senza ID valido, creane una
                         if (!currentSessionId || currentSessionId === 'new') {
                             console.log('Creating new session for directory setup...');
                             const createResponse = await fetch(`${window.location.origin}/api/create_chat`, {

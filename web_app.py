@@ -156,7 +156,9 @@ def set_directory():
     if not session_id or not path:
         return jsonify({"success": False, "error": "Dati mancanti"}), 400
 
+    print(f"DEBUG set_directory: session_id={session_id}, orchestrator_instances keys: {list(orchestrator_instances.keys())}")
     orchestrator = get_orchestrator(session_id, lang)
+    print(f"DEBUG set_directory: orchestrator.session_id after get_orchestrator: {orchestrator.session_id}")
     response_message = orchestrator.set_working_directory(path)
     
     if "ERRORE" in response_message:
