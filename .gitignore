@@ -70,3 +70,6 @@ htmlcov/
 # Application specific
 conversations/
 backup/
+
+# Claude memory file (local only)
+CLAUDE.md
