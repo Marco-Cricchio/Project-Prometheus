@@ -1601,10 +1601,34 @@
                 }
             });
 
-            newChatBtn.addEventListener('click', () => {
-                loadChat('new');
-                inputForm.style.display = 'block'; // Assicurati che l'input sia visibile
-                showToast('Nuova conversazione creata', 'success');
+            newChatBtn.addEventListener('click', async () => {
+                try {
+                    const response = await fetch(`${window.location.origin}/api/create_chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            lang: currentLang,
+                            architect: currentArchitect,
+                            tdd_mode: currentTddMode
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        // Carica la nuova conversazione creata
+                        loadChat(data.session_id);
+                        inputForm.style.display = 'block';
+                        const toastMessage = currentLang === 'it' ? 'Nuova conversazione creata' : 'New conversation created';
+                        showToast(toastMessage, 'success');
+                    } else {
+                        const errorMessage = currentLang === 'it' ? 'Errore nella creazione della conversazione' : 'Error creating conversation';
+                        showToast(errorMessage, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error creating new chat:', error);
+                    const errorMessage = currentLang === 'it' ? 'Errore nella creazione della conversazione' : 'Error creating conversation';
+                    showToast(errorMessage, 'error');
+                }
             });
 
             // ABORT REQUEST
@@ -1992,12 +2016,35 @@
             
             // WELCOME SCREEN LOGIC
             function showWelcomeScreen() {
+                const welcomeText = {
+                    'en': {
+                        subtitle: 'Autonomous AI assistant for software development with TDD methodology',
+                        startButton: '✨ Start New Chat',
+                        tipLabel: 'Tip:',
+                        tipText: 'Start by specifying your project directory path',
+                        tddLabel: 'TDD Mode:',
+                        tddText: 'Test-driven development for superior quality',
+                        toastMessage: 'New conversation started'
+                    },
+                    'it': {
+                        subtitle: 'Assistente AI autonomo per lo sviluppo software con metodologia TDD',
+                        startButton: '✨ Avvia Nuova Chat',
+                        tipLabel: 'Tip:',
+                        tipText: 'Inizia specificando il percorso della directory di progetto',
+                        tddLabel: 'Modalità TDD:',
+                        tddText: 'Sviluppo guidato dai test per qualità superiore',
+                        toastMessage: 'Nuova conversazione avviata'
+                    }
+                };
+                
+                const text = welcomeText[currentLang];
+                
                 chatWindow.innerHTML = `
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px; text-align: center; background: var(--main-bg-color);">
                         <div style="max-width: 500px;">
                             <h1 style="color: var(--prometheus-color); margin-bottom: 20px; font-size: 2.5em;">🚀 Project Prometheus</h1>
                             <p style="font-size: 1.2em; margin-bottom: 30px; color: var(--text-color); opacity: 0.8;">
-                                Assistente AI autonomo per lo sviluppo software con metodologia TDD
+                                ${text.subtitle}
                             </p>
                             <button id="start-new-chat-btn" style="
                                 background: var(--button-bg); 
@@ -2011,11 +2058,11 @@
                                 box-shadow: 0 2px 10px rgba(0,123,255,0.3);
                             " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 20px rgba(0,123,255,0.4)'" 
                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 10px rgba(0,123,255,0.3)'">
-                                ✨ Avvia Nuova Chat
+                                ${text.startButton}
                             </button>
                             <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid var(--border-color); opacity: 0.7;">
-                                <p style="font-size: 0.9em; margin: 5px 0;">💡 <strong>Tip:</strong> Inizia specificando il percorso della directory di progetto</p>
-                                <p style="font-size: 0.9em; margin: 5px 0;">🎯 <strong>Modalità TDD:</strong> Sviluppo guidato dai test per qualità superiore</p>
+                                <p style="font-size: 0.9em; margin: 5px 0;">💡 <strong>${text.tipLabel}</strong> ${text.tipText}</p>
+                                <p style="font-size: 0.9em; margin: 5px 0;">🎯 <strong>${text.tddLabel}</strong> ${text.tddText}</p>
                             </div>
                         </div>
                     </div>
@@ -2025,10 +2072,32 @@
                 inputForm.style.display = 'none';
                 
                 // Aggiungi event listener al button
-                document.getElementById('start-new-chat-btn').addEventListener('click', () => {
-                    loadChat('new');
-                    inputForm.style.display = 'block';
-                    showToast('Nuova conversazione avviata', 'success');
+                document.getElementById('start-new-chat-btn').addEventListener('click', async () => {
+                    try {
+                        const response = await fetch(`${window.location.origin}/api/create_chat`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                lang: currentLang,
+                                architect: currentArchitect,
+                                tdd_mode: currentTddMode
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        if (data.success) {
+                            loadChat(data.session_id);
+                            inputForm.style.display = 'block';
+                            showToast(text.toastMessage, 'success');
+                        } else {
+                            const errorMessage = currentLang === 'it' ? 'Errore nella creazione della conversazione' : 'Error creating conversation';
+                            showToast(errorMessage, 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error creating new chat:', error);
+                        const errorMessage = currentLang === 'it' ? 'Errore nella creazione della conversazione' : 'Error creating conversation';
+                        showToast(errorMessage, 'error');
+                    }
                 });
             }
             

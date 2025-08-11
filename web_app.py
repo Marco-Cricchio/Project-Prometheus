@@ -120,6 +120,32 @@ def get_orchestrator(session_id, lang='en', architect_llm='gemini'):
 def index():
     return render_template("index.html")
 
+@app.route("/api/create_chat", methods=["POST"])
+def create_chat():
+    """NUOVO ENDPOINT: Crea immediatamente una nuova conversazione con file salvato."""
+    data = request.json
+    lang = data.get("lang", 'en')
+    architect = data.get("architect", 'gemini')
+    tdd_mode = data.get("tdd_mode", True)
+    
+    # Crea un nuovo orchestrator che genererà automaticamente un session_id
+    orchestrator = get_orchestrator("new", lang, architect)
+    orchestrator.tdd_mode = tdd_mode
+    
+    # Forza il salvataggio dello stato per creare il file immediatamente
+    orchestrator.save_state()
+    
+    # Aggiungi un messaggio iniziale nella cronologia
+    initial_message = "Ciao! Sono Prometheus. Qual è la tua idea di base?" if lang == 'it' else "Hello! I'm Prometheus. What's your core idea?"
+    orchestrator.add_to_display_history("Prometheus", initial_message)
+    orchestrator.save_state()
+    
+    return jsonify({
+        "success": True, 
+        "session_id": orchestrator.session_id,
+        "message": initial_message
+    })
+
 @app.route("/api/set_directory", methods=["POST"])
 def set_directory():
     """NUOVO ENDPOINT: Imposta la directory di lavoro per una sessione."""
