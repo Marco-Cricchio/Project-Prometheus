@@ -1008,31 +1008,57 @@
                 localStorage.setItem('lang', lang);
                 const text = UI_TEXT[lang];
                 
-                document.getElementById('sidebar-title').textContent = text.title;
-                document.getElementById('new-chat-btn').textContent = text.newChat;
-                document.getElementById('theme-toggle-btn').innerHTML = text.themeBtn;
-                document.getElementById('lang-toggle-btn').innerHTML = text.langBtn;
-                document.getElementById('architect-label').textContent = text.architectLabel;
-                document.getElementById('tdd-label').textContent = text.tddLabel;
-                // Aggiorna testo TDD in base al toggle attuale
-                tddInfo.textContent = currentTddMode 
-                    ? text.tddInfo
-                    : `🚀 ${text.tddClassic}: Sviluppo diretto senza cicli TDD`;
-                document.getElementById('header-subtitle').textContent = text.headerSubtitle;
-                document.getElementById('user-input').placeholder = text.inputPlaceholder;
-                document.getElementById('sidebar-toggle-btn').title = text.sidebarToggle;
+                // Helper function to safely update element if it exists
+                const safeUpdate = (id, property, value) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        if (property === 'innerHTML') {
+                            element.innerHTML = value;
+                        } else if (property === 'textContent') {
+                            element.textContent = value;
+                        } else {
+                            element[property] = value;
+                        }
+                    }
+                };
                 
-                document.getElementById('directory-box-title').textContent = text.directoryBoxTitle;
-                document.getElementById('directory-box-intro').textContent = text.directoryBoxIntro;
-                document.getElementById('directory-box-examples').innerHTML = text.directoryBoxExamples;
+                // Update UI elements safely
+                safeUpdate('sidebar-title', 'textContent', text.title);
+                safeUpdate('new-chat-btn', 'textContent', text.newChat);
+                safeUpdate('theme-toggle-btn', 'innerHTML', text.themeBtn);
+                safeUpdate('lang-toggle-btn', 'innerHTML', text.langBtn);
+                safeUpdate('architect-label', 'textContent', text.architectLabel);
+                safeUpdate('tdd-label', 'textContent', text.tddLabel);
+                
+                // Aggiorna testo TDD in base al toggle attuale
+                if (tddInfo) {
+                    tddInfo.textContent = currentTddMode 
+                        ? text.tddInfo
+                        : `🚀 ${text.tddClassic}: Sviluppo diretto senza cicli TDD`;
+                }
+                
+                safeUpdate('header-subtitle', 'textContent', text.headerSubtitle);
+                safeUpdate('user-input', 'placeholder', text.inputPlaceholder);
+                
+                const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+                if (sidebarToggleBtn) {
+                    sidebarToggleBtn.title = text.sidebarToggle;
+                }
+                
+                // Update directory box elements if they exist
+                safeUpdate('directory-box-title', 'textContent', text.directoryBoxTitle);
+                safeUpdate('directory-box-intro', 'textContent', text.directoryBoxIntro);
+                safeUpdate('directory-box-examples', 'innerHTML', text.directoryBoxExamples);
                 
                 const stepsList = document.getElementById('directory-box-steps');
-                stepsList.innerHTML = '';
-                text.directoryBoxSteps.forEach(step => {
-                    const li = document.createElement('li');
-                    li.textContent = step;
-                    stepsList.appendChild(li);
-                });
+                if (stepsList) {
+                    stepsList.innerHTML = '';
+                    text.directoryBoxSteps.forEach(step => {
+                        const li = document.createElement('li');
+                        li.textContent = step;
+                        stepsList.appendChild(li);
+                    });
+                }
                 
                 // Se il welcome screen è attualmente mostrato, rigeneralo con la nuova lingua
                 if (isWelcomeScreenActive()) {
@@ -1397,12 +1423,8 @@
                         chatWindow.appendChild(directoryInstructionBox);
                     }
                     
-                    // Mostra messaggio iniziale per nuova conversazione
-                    const initialMessage = currentLang === 'it' 
-                        ? "Ciao! Sono Prometheus. Qual è la tua idea di base?"
-                        : "Hello! I'm Prometheus. What's your core idea?";
-                    
-                    addMessage('Prometheus', initialMessage); // Messaggio normale, non thinking
+                    // Non aggiungiamo più il messaggio iniziale qui perché 
+                    // le nuove conversazioni sono create tramite API e già contengono il messaggio
                     
                     await loadConversationHistory(true); // Refresh sidebar
                     inputForm.style.display = 'block'; // Mostra input per nuove conversazioni
@@ -1522,9 +1544,14 @@
                     input.focus();
                     input.select();
 
+                    let isRenaming = false; // Flag to prevent double execution
+                    
                     const finalizeRename = () => {
+                        if (isRenaming) return; // Prevent multiple calls
+                        
                         const newName = input.value.trim();
                         if (newName && newName !== nameSpan.textContent) {
+                            isRenaming = true;
                             fetch(`${window.location.origin}/api/rename`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1544,6 +1571,15 @@
                                     renameBtn.style.display = '';
                                     input.remove();
                                 }
+                                isRenaming = false;
+                            })
+                            .catch(error => {
+                                console.error('Rename error:', error);
+                                showToast('Errore nella rinomina', 'error');
+                                nameSpan.style.display = '';
+                                renameBtn.style.display = '';
+                                input.remove();
+                                isRenaming = false;
                             });
                         } else {
                             nameSpan.style.display = '';
