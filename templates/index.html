@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project Prometheus</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
@@ -1626,6 +1627,8 @@
                     const sessionId = li.dataset.sessionId;
                     const conversationName = li.querySelector('.conversation-name').textContent;
                     
+                    console.log('Delete request for session:', sessionId);
+                    
                     const confirmMessage = currentLang === 'it' 
                         ? `Sei sicuro di voler eliminare la conversazione "${conversationName}"?`
                         : `Are you sure you want to delete the conversation "${conversationName}"?`;
@@ -1643,7 +1646,8 @@
                                 if (sessionId === currentSessionId) {
                                     loadChat('new');
                                 }
-                                loadConversationHistory();
+                                // Ottimizzazione: aggiorna solo la sidebar senza ricaricare tutto
+                                setTimeout(() => loadConversationHistory(), 100);
                                 const successMessage = currentLang === 'it' 
                                     ? 'Conversazione eliminata'
                                     : 'Conversation deleted';
@@ -1745,6 +1749,25 @@
 
                 try {
                     if (!workingDirectorySet) {
+                        // Se non c'è una sessione corrente, creane una prima
+                        if (!currentSessionId || currentSessionId === 'new') {
+                            console.log('Creating new session for directory setup...');
+                            const createResponse = await fetch(`${window.location.origin}/api/create_chat`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    lang: currentLang,
+                                    architect: currentArchitect,
+                                    tdd_mode: currentTddMode
+                                })
+                            });
+                            const createData = await createResponse.json();
+                            if (createData.success) {
+                                currentSessionId = createData.session_id;
+                                console.log('New session created:', currentSessionId);
+                            }
+                        }
+                        
                         currentAbortController = new AbortController();
                         const response = await fetch(`${window.location.origin}/api/set_directory`, {
                             method: 'POST',
@@ -1760,7 +1783,6 @@
                         
                         if (data.success) {
                             workingDirectorySet = true;
-                            currentSessionId = data.session_id;
                             addMessage('Prometheus', data.message);
                             // Nascondi il banner quando la directory è impostata
                             directoryInstructionBox.style.display = 'none !important';
