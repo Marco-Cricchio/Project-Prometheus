@@ -557,7 +557,7 @@
             border-radius: 18px; padding: 10px 15px; 
             font-size: 1em; font-family: inherit;
             resize: none; line-height: 1.5;
-            min-height: 48px; max-height: 200px;
+            min-height: 60px; max-height: 200px;
             overflow-y: auto;
             transition: border-color 0.2s ease;
         }
@@ -1182,8 +1182,8 @@
             // TEXTAREA AUTO-RESIZE
             function adjustTextareaHeight() {
                 userInput.style.height = 'auto';
-                // Ensure minimum height of 48px (as defined in CSS)
-                const newHeight = Math.max(Math.min(userInput.scrollHeight, 200), 48);
+                // Ensure minimum height of 60px (as defined in CSS)
+                const newHeight = Math.max(Math.min(userInput.scrollHeight, 200), 60);
                 userInput.style.height = newHeight + 'px';
             }
             userInput.addEventListener('input', adjustTextareaHeight);
@@ -2041,6 +2041,9 @@
                 } finally {
                     console.log('[DEBUG] Finally block executed - resetting UI state');
                     console.log('[DEBUG] isProcessingRequest before reset:', isProcessingRequest);
+                    
+                    // Ensure typing indicator is always removed
+                    removeTypingIndicator();
                     
                     currentAbortController = null;
                     updateSendButtonState(false);
