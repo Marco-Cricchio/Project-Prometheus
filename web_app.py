@@ -137,7 +137,7 @@ def create_chat():
     
     # Aggiungi un messaggio iniziale nella cronologia
     initial_message = "Ciao! Sono Prometheus. Qual è la tua idea di base?" if lang == 'it' else "Hello! I'm Prometheus. What's your core idea?"
-    orchestrator.add_to_display_history("Prometheus", initial_message)
+    orchestrator.conversation_history.append(f"[Prometheus]: {initial_message}")
     orchestrator.save_state()
     
     return jsonify({
