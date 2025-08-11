@@ -546,15 +546,14 @@
         /* INPUT FORM */
         #input-form { 
             display: flex; 
-            flex-direction: row;
-            align-items: flex-end; 
+            align-items: center; 
             padding: 15px; border-top: 1px solid var(--border-color); 
             background-color: var(--main-bg-color); 
-            gap: 10px; flex-shrink: 0; 
+            gap: 10px; 
         }
         #user-input { 
             flex: 1;
-            min-width: 0;
+            width: 0; /* Force flex to work */
             background-color: var(--sidebar-bg); 
             color: var(--text-color); 
             border: 1px solid var(--border-color); 
