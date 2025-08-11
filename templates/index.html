@@ -1182,9 +1182,13 @@
             // TEXTAREA AUTO-RESIZE
             function adjustTextareaHeight() {
                 userInput.style.height = 'auto';
-                userInput.style.height = Math.min(userInput.scrollHeight, 200) + 'px';
+                // Ensure minimum height of 48px (as defined in CSS)
+                const newHeight = Math.max(Math.min(userInput.scrollHeight, 200), 48);
+                userInput.style.height = newHeight + 'px';
             }
             userInput.addEventListener('input', adjustTextareaHeight);
+            // Set initial height
+            adjustTextareaHeight();
 
             userInput.addEventListener('keydown', function(event) {
                 if (event.key === 'Enter' && !event.shiftKey) {
