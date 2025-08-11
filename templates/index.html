@@ -1033,6 +1033,16 @@
                     li.textContent = step;
                     stepsList.appendChild(li);
                 });
+                
+                // Se il welcome screen è attualmente mostrato, rigeneralo con la nuova lingua
+                if (isWelcomeScreenActive()) {
+                    showWelcomeScreen();
+                }
+            }
+            
+            // Funzione helper per controllare se il welcome screen è attivo
+            function isWelcomeScreenActive() {
+                return chatWindow.querySelector('#start-new-chat-btn') !== null;
             }
 
             // STATUS CLASS
