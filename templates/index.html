@@ -545,19 +545,20 @@
 
         /* INPUT FORM */
         #input-form { 
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: end; 
             padding: 15px; border-top: 1px solid var(--border-color); 
             background-color: var(--main-bg-color); 
-            gap: 10px; 
+        }
+        #input-container {
+            position: relative;
+            width: 100%;
         }
         #user-input { 
             width: 100%;
             background-color: var(--sidebar-bg); 
             color: var(--text-color); 
             border: 1px solid var(--border-color); 
-            border-radius: 18px; padding: 10px 15px; 
+            border-radius: 18px; 
+            padding: 10px 50px 10px 15px; /* Right padding for button */
             font-size: 1em; font-family: inherit;
             resize: none; line-height: 1.5;
             min-height: 60px; max-height: 200px;
@@ -569,13 +570,17 @@
             border-color: var(--button-bg);
         }
         #send-btn { 
+            position: absolute;
+            right: 5px;
+            bottom: 5px;
             background-color: var(--button-bg); color: white; 
             border: none; border-radius: 50%; 
-            width: 48px; height: 48px;
-            cursor: pointer; font-size: 1.5em; 
-            flex-shrink: 0; display: flex; 
+            width: 40px; height: 40px;
+            cursor: pointer; font-size: 1.2em; 
+            display: flex; 
             align-items: center; justify-content: center;
             transition: all 0.2s ease;
+            z-index: 1;
         }
         #send-btn:hover { 
             transform: scale(1.1);
@@ -715,8 +720,10 @@
                 </div>
             </div>
             <form id="input-form">
-                <textarea id="user-input" placeholder="Scrivi il tuo messaggio... (Shift+Invio per nuova riga)" rows="1"></textarea>
-                <button id="send-btn" type="submit" title="Invia">➤</button>
+                <div id="input-container">
+                    <textarea id="user-input" placeholder="Scrivi il tuo messaggio... (Shift+Invio per nuova riga)" rows="1"></textarea>
+                    <button id="send-btn" type="submit" title="Invia">➤</button>
+                </div>
             </form>
         </main>
     </div>
