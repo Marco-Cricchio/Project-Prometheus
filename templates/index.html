@@ -1228,7 +1228,7 @@
             // MESSAGE FUNCTIONS
             function addMessage(speaker, content = "", isThinking = false, thinkingMessage = null) {
                 const messageDiv = document.createElement('div');
-                messageDiv.classList.add('message', speaker.toLowerCase());
+                messageDiv.classList.add('message', speaker.toLowerCase().replace(/[^a-z0-9-_]/g, ''));
                 
                 const speakerSpan = document.createElement('span');
                 speakerSpan.classList.add('speaker');
@@ -1297,8 +1297,16 @@
 
             // BUFFERED STREAMING
             function appendToStream(markdownContent, immediate = false) {
+                console.log(`[DEBUG] appendToStream called with content length: ${markdownContent.length}`);
                 if (!currentStreamElement) {
-                    currentStreamElement = addMessage('Prometheus');
+                    console.log(`[DEBUG] Creating new stream element via addMessage('Prometheus')`);
+                    try {
+                        currentStreamElement = addMessage('Prometheus');
+                        console.log(`[DEBUG] addMessage returned:`, currentStreamElement);
+                    } catch (error) {
+                        console.error(`[ERROR] addMessage failed:`, error);
+                        return;
+                    }
                 }
                 
                 streamBuffer += markdownContent;
@@ -1903,6 +1911,7 @@
                             
                             // Se non ci sono segnali, tratta come contenuto normale
                             if (!signalPattern.test(chunk)) {
+                                console.log(`[DEBUG] No signals found in chunk, treating as content: "${chunk.substring(0, 100)}..."`);
                                 return [{ type: 'content', data: chunk }];
                             }
                             
@@ -1918,24 +1927,16 @@
                                     }
                                 }
                                 
-                                // Trova la fine di questo segnale (inizio del prossimo o fine stringa)
-                                const nextMatch = signalPattern.exec(chunk);
-                                const endIndex = nextMatch ? nextMatch.index : chunk.length;
-                                signalPattern.lastIndex = match.index + match[0].length; // Reset per prossima iterazione
-                                
-                                const signalContent = chunk.substring(match.index, endIndex);
-                                signals.push({ type: 'signal', signal: match[1], data: signalContent });
-                                
-                                lastIndex = endIndex;
-                                if (nextMatch) {
-                                    signalPattern.lastIndex = nextMatch.index; // Riposiziona per il prossimo
-                                }
+                                // Il segnale stesso (solo il tag)
+                                signals.push({ type: 'signal', signal: match[1], data: match[0] });
+                                lastIndex = match.index + match[0].length;
                             }
                             
                             // Aggiungi contenuto finale (se presente)
                             if (lastIndex < chunk.length) {
                                 const content = chunk.substring(lastIndex).trim();
                                 if (content) {
+                                    console.log(`[DEBUG] Adding remaining content after signals: "${content.substring(0, 50)}..."`);
                                     signals.push({ type: 'content', data: content });
                                 }
                             }
@@ -1949,9 +1950,32 @@
                             
                             if (signal.type === 'content') {
                                 // Contenuto normale - rendering più reattivo
-                                console.log(`[DEBUG] Processing content: "${signal.data.substring(0, 50)}..."`);
-                                removeTypingIndicator(); // Rimuovi indicator quando arriva contenuto
-                                appendToStream(signal.data, true); // Rendering immediato per contenuto
+                                console.log(`[DEBUG] Processing content signal, length: ${signal.data.length}, content: "${signal.data.substring(0, 50)}..."`);
+                                
+                                // Pulizia etichette tecniche dal contenuto
+                                let cleanContent = signal.data
+                                    .replace(/\[USER_THINKING\][^[]*?(?=\[|$)/g, '') // Rimuovi [USER_THINKING] e contenuto fino al prossimo [
+                                    .replace(/\[USER_FEEDBACK\]/g, '')
+                                    .replace(/\[DEBUG\]/g, '')
+                                    .replace(/\[THINKING\]/g, '')
+                                    .replace(/\[CLAUDE_PROMPT\]/g, '')
+                                    .replace(/\[CLAUDE_WORKING\]/g, '')
+                                    .replace(/\[PROMETHEUS_COMPLETE\]/g, '')
+                                    .trim();
+                                
+                                console.log(`[DEBUG] Original content length: ${signal.data.length}, clean content length: ${cleanContent.length}`);
+                                
+                                if (cleanContent) {
+                                    removeTypingIndicator(); // Rimuovi indicator quando arriva contenuto
+                                    appendToStream(cleanContent, true); // Rendering immediato per contenuto
+                                    console.log(`[DEBUG] appendToStream called for cleaned content`);
+                                } else {
+                                    console.warn(`[DEBUG] Content was completely filtered out! Original: "${signal.data.substring(0, 100)}..."`);
+                                    // Failsafe: usa contenuto originale se i filtri rimuovono tutto
+                                    removeTypingIndicator();
+                                    appendToStream(signal.data, true);
+                                    console.log(`[DEBUG] appendToStream called for original content as failsafe`);
+                                }
                                 return;
                             }
                             
@@ -1995,6 +2019,29 @@
                                         addTypingIndicator('⚙️ Analizzando prossimo step di sviluppo...', true);
                                     } else {
                                         addTypingIndicator('💭 Elaborando risposta...', true);
+                                    }
+                                    break;
+                                    
+                                case 'USER_THINKING':
+                                    removeTypingIndicator();
+                                    const userThinkingText = data.replace('[USER_THINKING]', '').trim();
+                                    if (userThinkingText) {
+                                        addTypingIndicator(userThinkingText, true);
+                                    }
+                                    break;
+                                    
+                                case 'USER_FEEDBACK':
+                                    removeTypingIndicator();
+                                    const feedbackText = data.replace('[USER_FEEDBACK]', '').trim();
+                                    if (feedbackText) {
+                                        // Rimuovi l'etichetta 💬 e mostra solo il messaggio pulito
+                                        const cleanFeedback = feedbackText.replace(/💬\s*/, '').trim();
+                                        if (cleanFeedback) {
+                                            addMessage('Prometheus', cleanFeedback, false);
+                                            // Toast più discreto senza etichette
+                                            const shortFeedback = cleanFeedback.substring(0, 40) + (cleanFeedback.length > 40 ? '...' : '');
+                                            showToast(shortFeedback, 'info', 1500);
+                                        }
                                     }
                                     break;
                                     
@@ -2044,11 +2091,18 @@
                                     removeTypingIndicator();
                                     const infoText = data.replace('[INFO]', '').trim();
                                     if (infoText) {
-                                        addMessage('System', infoText);
-                                        if (infoText.includes('pausa')) {
+                                        // Mostra solo messaggi INFO importanti per l'utente
+                                        if (infoText.includes('✅ Progetto completato!')) {
+                                            addMessage('System', infoText);
+                                            showToast('🎉 Progetto completato!', 'success');
+                                        } else if (infoText.includes('pausa') || infoText.includes('domanda')) {
                                             updateDevStatus('Paused', developmentSteps);
-                                            showToast('Ciclo in pausa', 'warning');
+                                            showToast('Ciclo in pausa - aspetto risposta', 'warning');
+                                        } else if (infoText.includes('🛑') && (infoText.includes('loop infinito') || infoText.includes('errori consecutivi'))) {
+                                            addMessage('System', infoText);
+                                            showToast('Sviluppo interrotto automaticamente', 'error');
                                         }
+                                        // Altri messaggi INFO tecnici vengono ignorati (non mostrati in chat)
                                     }
                                     break;
                                     
