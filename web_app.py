@@ -133,12 +133,11 @@ def create_chat():
     orchestrator.tdd_mode = tdd_mode
     
     # Forza il salvataggio dello stato per creare il file immediatamente
+    # L'orchestrator aggiunge automaticamente il messaggio iniziale quando viene creato
     orchestrator.save_state()
     
-    # Aggiungi un messaggio iniziale nella cronologia
+    # Ottieni il messaggio iniziale per la risposta (senza aggiungerlo di nuovo)
     initial_message = "Ciao! Sono Prometheus. Qual è la tua idea di base?" if lang == 'it' else "Hello! I'm Prometheus. What's your core idea?"
-    orchestrator.conversation_history.append(f"[Prometheus]: {initial_message}")
-    orchestrator.save_state()
     
     return jsonify({
         "success": True, 

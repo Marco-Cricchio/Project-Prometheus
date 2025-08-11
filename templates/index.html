@@ -1552,6 +1552,10 @@
                         const newName = input.value.trim();
                         if (newName && newName !== nameSpan.textContent) {
                             isRenaming = true;
+                            // Remove event listeners to prevent double execution
+                            input.removeEventListener('blur', finalizeRename);
+                            input.removeEventListener('keydown', keydownHandler);
+                            
                             fetch(`${window.location.origin}/api/rename`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -1588,8 +1592,7 @@
                         }
                     };
 
-                    input.addEventListener('blur', finalizeRename);
-                    input.addEventListener('keydown', (e) => {
+                    const keydownHandler = (e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
                             finalizeRename();
@@ -1598,7 +1601,10 @@
                             renameBtn.style.display = '';
                             input.remove();
                         }
-                    });
+                    };
+
+                    input.addEventListener('blur', finalizeRename);
+                    input.addEventListener('keydown', keydownHandler);
                 } else if (deleteBtn) {
                     event.stopPropagation();
                     const li = deleteBtn.closest('li');
