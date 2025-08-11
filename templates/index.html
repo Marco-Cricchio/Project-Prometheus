@@ -76,17 +76,15 @@
             box-shadow: 0 0 10px rgba(0,123,255,0.5);
         }
         #dev-status {
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 0.85em;
+            font-size: 0.6em;
             background: rgba(255,255,255,0.1);
-            padding: 5px 12px;
-            border-radius: 20px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-left: 15px;
             display: none;
+            vertical-align: middle;
         }
-        #dev-status.active { display: block; }
+        #dev-status.active { display: inline-block; }
         
         /* PROVIDER STATUS INDICATOR */
         #provider-status {
@@ -260,6 +258,21 @@
             color: var(--muted-color);
             margin-top: 5px;
             line-height: 1.3;
+        }
+        
+        /* DEV STATUS BAR IN SIDEBAR */
+        #dev-status-bar {
+            background: rgba(0, 123, 255, 0.1);
+            border: 1px solid rgba(0, 123, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 15px 0;
+            font-size: 11px;
+        }
+        #dev-status-bar .status-text {
+            color: var(--text-color);
+            margin-bottom: 8px;
+            font-weight: bold;
         }
         
         /* CONVERSATION LIST CON PALLINI DI STATO */
@@ -680,6 +693,13 @@
                 </div>
             </div>
             
+            <div id="dev-status-bar" style="display: none;">
+                <div class="status-text" style="margin-bottom: 8px; font-weight: bold; font-size: 12px;"></div>
+                <div style="background: rgba(255,255,255,0.2); height: 4px; border-radius: 2px;">
+                    <div class="progress-fill" style="background: #4ecdc4; height: 100%; border-radius: 2px; width: 0%; transition: width 0.3s ease;"></div>
+                </div>
+            </div>
+            
             <ul id="conversation-list"></ul>
             <div id="sidebar-controls" style="margin-top: auto;">
                 <button id="theme-toggle-btn" class="sidebar-btn">🌙 Tema</button>
@@ -690,12 +710,8 @@
             <header id="header-container">
                 <button id="sidebar-toggle-btn" title="Mostra/Nascondi Sidebar">‹</button>
                 <div style="flex-grow: 1;">
-                    <h1>Project Prometheus</h1>
+                    <h1>Project Prometheus <span id="dev-status"><span id="dev-phase">Idle</span> • <span id="dev-steps">0</span> steps</span></h1>
                     <p id="header-subtitle">Scrivi "ACCENDI I MOTORI!" per avviare lo sviluppo dal piano concordato.</p>
-                </div>
-                <div id="dev-status">
-                    <span id="dev-phase">Idle</span> • 
-                    <span id="dev-steps">0</span> steps
                 </div>
                 <div id="provider-status" style="display: none;">
                     <span id="provider-icon">🔷</span>
@@ -763,7 +779,7 @@
             let currentSessionId = null;
             let currentLang = localStorage.getItem('lang') || 'it';
             let currentArchitect = localStorage.getItem('architect') || 'gemini';
-            let currentTddMode = localStorage.getItem('tddMode') !== 'false'; // Default: true
+            let currentTddMode = localStorage.getItem('tddMode') === 'true' || localStorage.getItem('tddMode') === null; // Default: true, explicit parsing
             let workingDirectorySet = false;
             let currentStreamElement = null;
             let statusUpdateInterval = null;
@@ -1159,7 +1175,7 @@
             // TDD TOGGLE
             tddToggle.addEventListener('change', () => {
                 currentTddMode = tddToggle.checked;
-                localStorage.setItem('tddMode', currentTddMode);
+                localStorage.setItem('tddMode', String(currentTddMode)); // Store as string
                 
                 // Aggiorna testo informativo
                 tddInfo.textContent = currentTddMode 
@@ -1948,6 +1964,14 @@
                                     console.log('[DEBUG] KEEPALIVE signal received');
                                     updateConnectionStatus('connected');
                                     break;
+                                    
+                                case 'PROMETHEUS_COMPLETE':
+                                    console.log('[DEBUG] PROMETHEUS_COMPLETE signal received - task finished');
+                                    removeTypingIndicator();
+                                    addMessage('Prometheus', '🏁 **Task completato!** Ciclo di sviluppo terminato.', false);
+                                    showToast('✅ Task completato con successo!', 'success');
+                                    updateConnectionStatus('completed');
+                                    return 'END';
                                     
                                 case 'STREAM_END':
                                     console.log('[DEBUG] STREAM_END signal received - returning END');

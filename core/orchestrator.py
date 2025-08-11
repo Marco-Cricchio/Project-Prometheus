@@ -21,11 +21,75 @@ debug_formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
 debug_handler.setFormatter(debug_formatter)
 debug_logger.addHandler(debug_handler)
 
+# Setup PROMPT ANALYSIS logger - separate file for performance analysis
+prompt_logger = logging.getLogger('prometheus_prompts')
+prompt_logger.setLevel(logging.INFO)
+prompt_log_path = os.path.expanduser('~/prometheus_prompts.log')
+prompt_handler = logging.FileHandler(prompt_log_path)
+prompt_formatter = logging.Formatter('%(asctime)s | %(message)s')
+prompt_handler.setFormatter(prompt_formatter)
+prompt_logger.addHandler(prompt_handler)
+
 # Log startup message to confirm logging is working
 debug_logger.info("="*50)
 debug_logger.info("PROMETHEUS DEBUG LOGGING STARTED")
-debug_logger.info(f"Log file location: {log_file_path}")
+debug_logger.info(f"Debug log: {log_file_path}")
+debug_logger.info(f"Prompt analysis log: {prompt_log_path}")
 debug_logger.info("="*50)
+
+prompt_logger.info("="*80)
+prompt_logger.info("PROMETHEUS PROMPT ANALYSIS LOG - SESSION START")
+prompt_logger.info("="*80)
+
+# Prompt analysis utility functions
+def log_prompt_interaction(phase, source, target, prompt_text, response_text="", timing_ms=0, tokens_estimate=0):
+    """
+    Log detailed prompt interaction for performance analysis
+    
+    Args:
+        phase: "BRAINSTORMING" or "DEVELOPMENT"
+        source: "USER", "PROMETHEUS", "GEMINI", "CLAUDE"  
+        target: "USER", "PROMETHEUS", "GEMINI", "CLAUDE"
+        prompt_text: The actual prompt sent
+        response_text: The response received (first 200 chars)
+        timing_ms: Time taken for the interaction
+        tokens_estimate: Estimated token count
+    """
+    timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    
+    # Calculate sizes
+    prompt_chars = len(prompt_text) if prompt_text else 0
+    response_chars = len(response_text) if response_text else 0
+    prompt_words = len(prompt_text.split()) if prompt_text else 0
+    response_words = len(response_text.split()) if response_text else 0
+    
+    # Estimate tokens if not provided
+    if tokens_estimate == 0:
+        tokens_estimate = (prompt_chars + response_chars) // 4
+    
+    prompt_logger.info(f"[{timestamp}] PHASE:{phase} | {source}→{target}")
+    prompt_logger.info(f"  📊 METRICS: {prompt_chars:,}chars | {prompt_words:,}words | ~{tokens_estimate:,}tokens | {timing_ms}ms")
+    
+    if prompt_text:
+        # Log first 300 chars of prompt for analysis
+        prompt_preview = prompt_text[:300] + "..." if len(prompt_text) > 300 else prompt_text
+        prompt_logger.info(f"  📝 PROMPT: {prompt_preview}")
+    
+    if response_text:
+        # Log first 200 chars of response
+        response_preview = response_text[:200] + "..." if len(response_text) > 200 else response_text
+        prompt_logger.info(f"  💬 RESPONSE: {response_preview}")
+    
+    prompt_logger.info(f"  {'─'*80}")
+
+def log_phase_transition(from_phase, to_phase, session_id="", reason=""):
+    """Log when we switch between brainstorming and development phases"""
+    prompt_logger.info(f"🔄 PHASE TRANSITION: {from_phase} → {to_phase}")
+    if session_id:
+        prompt_logger.info(f"  📋 Session: {session_id}")
+    if reason:
+        prompt_logger.info(f"  💡 Reason: {reason}")
+    prompt_logger.info(f"  {'='*80}")
 
 # Gestione import Gemini con lazy loading
 class _GeminiImports:
@@ -420,11 +484,36 @@ class Orchestrator:
     def _get_architect_response(self, full_dev_prompt):
         """Chiama l'architetto selezionato con fallback automatico intelligente."""
         
+        start_time = time.time()
+        
         # Prima prova con l'architetto corrente (può essere diverso dall'originale se già in fallback)
         if self.current_architect == 'gemini' and _lazy_import_gemini() and self.model:
             try:
+                # LOG: Prompt to Gemini
+                log_prompt_interaction(
+                    phase=self.mode,
+                    source="PROMETHEUS",
+                    target="GEMINI", 
+                    prompt_text=full_dev_prompt,
+                    response_text="",
+                    timing_ms=0
+                )
+                
                 response = self.model.generate_content(full_dev_prompt, generation_config=self.generation_config)
-                return response.text.strip()
+                response_text = response.text.strip()
+                
+                # LOG: Response from Gemini
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                log_prompt_interaction(
+                    phase=self.mode,
+                    source="GEMINI",
+                    target="PROMETHEUS",
+                    prompt_text="",
+                    response_text=response_text,
+                    timing_ms=elapsed_ms
+                )
+                
+                return response_text
             except Exception as e:
                 # Analizza l'errore per determinare il tipo
                 error_type = ProviderErrorHandler.detect_error_type(str(e))
@@ -444,7 +533,28 @@ class Orchestrator:
         
         # Claude (selezionato originariamente o come fallback)
         try:
+            # LOG: Prompt to Claude
+            log_prompt_interaction(
+                phase=self.mode,
+                source="PROMETHEUS",
+                target="CLAUDE",
+                prompt_text=full_dev_prompt,
+                response_text="",
+                timing_ms=0
+            )
+            
             claude_response = _run_claude_with_prompt(full_dev_prompt, self.working_directory, timeout=180)
+            
+            # LOG: Response from Claude
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            log_prompt_interaction(
+                phase=self.mode,
+                source="CLAUDE",
+                target="PROMETHEUS",
+                prompt_text="",
+                response_text=claude_response,
+                timing_ms=elapsed_ms
+            )
             
             # Controlla se Claude ha restituito un messaggio di limite raggiunto
             if self._is_claude_limit_error(claude_response):
@@ -647,6 +757,9 @@ class Orchestrator:
                 files_in_dir = []
                 for root, dirs, files in os.walk(path):
                     for file in files:
+                        # Ignora file di sistema come .DS_Store
+                        if file == '.DS_Store':
+                            continue
                         rel_path = os.path.relpath(os.path.join(root, file), path)
                         files_in_dir.append(rel_path)
                 
@@ -838,6 +951,17 @@ class Orchestrator:
 
     def process_user_input(self, user_text):
         """Punto di ingresso che mette in coda le azioni."""
+        
+        # LOG: User input in brainstorming phase
+        log_prompt_interaction(
+            phase=self.mode,
+            source="USER", 
+            target="PROMETHEUS",
+            prompt_text=user_text,
+            response_text="",
+            timing_ms=0
+        )
+        
         self.conversation_history.append(f"[User]: {user_text}")
         
         # CRITICAL FIX: Salva sempre la sessione dopo aver aggiunto input utente
@@ -975,6 +1099,14 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             self.output_queue.put(None)
             return
 
+        # LOG: Phase transition
+        log_phase_transition(
+            from_phase="BRAINSTORMING", 
+            to_phase="DEVELOPMENT",
+            session_id=self.session_id,
+            reason="User triggered development start"
+        )
+        
         self.mode = "DEVELOPMENT"
         
         # Reset contatori per detection del completamento
@@ -1016,7 +1148,7 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
             self.output_queue.put(None)
     
     def _detect_project_completion(self, claude_response):
-        """Rileva se Claude indica che il progetto è completato."""
+        """Rileva se Claude indica che il progetto è completato usando keyword inequivocabile."""
         if not claude_response:
             return False
         
@@ -1024,24 +1156,69 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         if self.mode == "BRAINSTORMING":
             return False
         
+        # PRIMARY: Keyword inequivocabile (case-insensitive)
+        completion_keyword = "[PROMETHEUS_COMPLETE]"
+        if completion_keyword.lower() in claude_response.lower():
+            debug_logger.info(f"🏁 INEQUIVOCABLE COMPLETION KEYWORD detected: {completion_keyword}")
+            # Send signal to frontend for immediate UX feedback
+            if hasattr(self, 'output_queue'):
+                self.output_queue.put("[PROMETHEUS_COMPLETE]Task completato con keyword inequivocabile")
+            return True
+        
         response_lower = claude_response.lower()
         
-        # Keywords di completamento
+        # FALLBACK: Detection legacy per compatibilità (ma keyword ha priorità)
+        # ENHANCED: Rileva modifiche semplici (cambio colore, testo, etc)
+        # Queste dovrebbero terminare immediatamente dopo la modifica
+        simple_changes = [
+            "colore", "color", "sostituisci", "replace", "cambia", "change",
+            "modifica", "modify", "aggiorna", "update", "viola", "giallo", 
+            "rosso", "blu", "green", "purple", "yellow", "red", "blue"
+        ]
+        
+        # Check se è una richiesta di modifica semplice nella conversation history
+        is_simple_change = False
+        if hasattr(self, 'conversation_history') and self.conversation_history:
+            recent_messages = ' '.join(self.conversation_history[-3:]).lower()
+            is_simple_change = any(word in recent_messages for word in simple_changes)
+        
+        # Per modifiche semplici, detection più aggressivo
+        if is_simple_change:
+            simple_completion_indicators = [
+                "sostituito", "replaced", "cambiato", "changed", 
+                "aggiornato", "updated", "modificato", "modified",
+                "applicato", "applied", "implementato", "implemented"
+            ]
+            if any(word in response_lower for word in simple_completion_indicators):
+                debug_logger.info(f"🚀 SIMPLE CHANGE COMPLETION detected: {[w for w in simple_completion_indicators if w in response_lower]}")
+                return True
+        
+        # Keywords di completamento (con frasi dalla chat reale)
         completion_phrases = [
             "applicazione completata",
-            "progetto completato", 
-            "completamente implementata",
+            "progetto completato",
+            "progetto completo", # FIX: Claude dice "completo" non "completato"
+            "completamente implementata", 
+            "completamente funzionante",
             "implementazione completata",
             "pronto all'uso",
             "pronta per l'uso",
-            "completamente funzionante",
             "implementation complete",
-            "application completed",
+            "application completed", 
             "ready to use",
             "fully functional",
             "project completed",
             "tutto implementato",
-            "all features implemented"
+            "all features implemented",
+            # FIXES da chat reale:
+            "completata con",  # "completata con viola implementato"
+            "completo e funzionante",  # "progetto completo e funzionante"
+            "è funzionale",
+            "modificata correttamente",
+            "modifica applicata",
+            "modifica completata",  # Nuovo pattern dal prompt
+            "changed successfully",
+            "change completed"
         ]
         
         # Rileva frasi di repetizione (indica loop) - AGGIORNATE CON FRASI DAL LOG PIÙ RECENTE
@@ -1180,6 +1357,10 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
         except Exception:
             user_feedback = "Inizia il lavoro basandoti sul PRP."
         
+        # Track consecutive errors to prevent infinite loops
+        consecutive_errors = 0
+        last_error_message = ""
+        
         while self.is_running:
             self.total_cycles += 1
             
@@ -1189,11 +1370,37 @@ IMPORTANTE: Rispondi solo come architetto che sta definendo i requisiti. NON scr
                 self.is_running = False
                 break
             
+            # Failsafe: stop after too many consecutive errors
+            if consecutive_errors >= 3:
+                self.output_queue.put(f"[INFO]🛑 Interrotto dopo {consecutive_errors} errori consecutivi. Possibile problema con Claude CLI.")
+                self.is_running = False
+                break
+            
             # Esegui un passo di sviluppo e cattura la risposta
             step_response = ""
+            step_had_error = False
+            
             for chunk in self.handle_development_step(user_feedback):
                 self.output_queue.put(chunk)
                 step_response += str(chunk)
+                
+                # Check for errors in real-time
+                if "**ERRORE" in str(chunk) or "[STDERR]" in str(chunk):
+                    step_had_error = True
+            
+            # Update error tracking
+            if step_had_error:
+                current_error = step_response[-200:] if len(step_response) > 200 else step_response
+                if current_error == last_error_message:
+                    consecutive_errors += 1
+                    debug_logger.warning(f"Consecutive error #{consecutive_errors}: Same error repeating")
+                else:
+                    consecutive_errors = 1
+                    last_error_message = current_error
+                    debug_logger.info(f"New error detected, consecutive count reset to 1")
+            else:
+                consecutive_errors = 0
+                last_error_message = ""
             
             # FIRST: Rileva se Claude sta facendo domande all'utente
             user_question_detected = self._detect_user_question(step_response)
@@ -1478,33 +1685,58 @@ ISTRUZIONI BATCH:
                 )
             else:
                 # MODALITÀ CLASSICA: Sviluppo diretto senza TDD
-                methodology_prompt = (
-                    f"Sei l'ARCHITETTO per questo progetto. Segui un approccio di sviluppo diretto e pragmatico.\n\n"
-                    f"**METODOLOGIA CLASSICA:**\n"
-                    f"1. **ANALISI:** Comprendi il requirement\n"
-                    f"2. **IMPLEMENTAZIONE:** Crea direttamente il codice funzionante\n"
-                    f"3. **VERIFICA:** Testa manualmente o con esempi semplici\n"
-                    f"4. **ITERAZIONE:** Migliora basandoti sui feedback\n\n"
-                    f"**FOCUS SVILUPPO CLASSICO:**\n"
-                    f"- Priorità su funzionalità rapidamente utilizzabili\n"
-                    f"- Codice semplice e diretto\n"
-                    f"- Testing opzionale o di verifica finale\n"
-                )
+                # Check if this is a simple static web app (HTML/CSS/JS only)
+                is_simple_static = False
+                if self.project_plan:
+                    plan_lower = self.project_plan.lower()
+                    static_indicators = ["vanilla js", "html", "css", "static", "browser", "file statici"]
+                    complex_indicators = ["npm", "node", "server", "api", "database", "framework", "webpack", "build"]
+                    
+                    has_static = any(indicator in plan_lower for indicator in static_indicators)
+                    has_complex = any(indicator in plan_lower for indicator in complex_indicators)
+                    
+                    is_simple_static = has_static and not has_complex
+                
+                if is_simple_static:
+                    methodology_prompt = (
+                        f"Sei l'ARCHITETTO per un progetto WEB STATICO semplice. Sviluppo RAPIDO e DIRETTO.\n\n"
+                        f"**METODOLOGIA STATIC-FIRST:**\n"
+                        f"1. **IMPLEMENTAZIONE DIRETTA:** Crea i file HTML/CSS/JS immediatamente\n"
+                        f"2. **TUTTO IN UNA VOLTA:** Non frammentare in micro-task\n"
+                        f"3. **NO SETUP:** Evita npm, testing framework, build tools\n"
+                        f"4. **FILE READY:** Codice immediatamente utilizzabile nel browser\n\n"
+                        f"**PRIORITÀ ASSOLUTA:**\n"
+                        f"- Crea tutti i file principali in 1-2 iterazioni MAX\n"
+                        f"- Codice funzionante subito, refinement dopo\n"
+                        f"- NO testing setup per progetti statici semplici\n"
+                    )
+                else:
+                    methodology_prompt = (
+                        f"Sei l'ARCHITETTO per questo progetto. Segui un approccio di sviluppo diretto e pragmatico.\n\n"
+                        f"**METODOLOGIA CLASSICA:**\n"
+                        f"1. **ANALISI:** Comprendi il requirement\n"
+                        f"2. **IMPLEMENTAZIONE:** Crea direttamente il codice funzionante\n"
+                        f"3. **VERIFICA:** Testa manualmente o con esempi semplici\n"
+                        f"4. **ITERAZIONE:** Migliora basandoti sui feedback\n\n"
+                        f"**FOCUS SVILUPPO CLASSICO:**\n"
+                        f"- Priorità su funzionalità rapidamente utilizzabili\n"
+                        f"- Codice semplice e diretto\n"
+                        f"- Testing opzionale o di verifica finale\n"
+                    )
+            
+            # OTTIMIZZAZIONE COSTI: Prompt condensato con solo info essenziali
+            # Include solo ultimi 3 elementi della cronologia invece di tutta
+            recent_history = self.conversation_history[-3:] if len(self.conversation_history) > 3 else self.conversation_history
+            history_summary = "\n".join(recent_history) if recent_history else "Inizio progetto"
+            
+            # Piano progetto: solo summary se troppo lungo
+            plan_summary = self.project_plan[:300] + "..." if self.project_plan and len(self.project_plan) > 300 else self.project_plan
             
             dev_prompt_context = (
                 methodology_prompt +
-                f"**PIANO DI PROGETTO (PRP):**\n---\n{self.project_plan}\n---\n\n"
-                f"**CRONOLOGIA AZIONI COMPLETA:**\n---\n{self.conversation_history}\n---\n\n"
-                f"**DIRECTORY LAVORO:** {self.working_directory}\n"
-                f"**IMPORTANTE:** Questa directory È già la ROOT del progetto. NON creare sottocartelle con il nome del progetto.\n"
-                f"Tutti i file devono essere creati direttamente in questa directory o nelle sue sottocartelle logiche.\n\n"
-                
-                f"**ANALISI OBBLIGATORIA - LEGGI ATTENTAMENTE L'ULTIMO OUTPUT:**\n"
-                f"Prima di decidere, analizza ESATTAMENTE cosa è successo nell'ultima azione:\n"
-                f"1. **Files Esistenti:** Quali file sono stati creati/modificati nell'ultima azione?\n"
-                f"2. **Status Generale:** Cosa è stato completato nell'ultima azione?\n"
-                f"3. **Errori:** Ci sono stati errori di compilazione, import, o esecuzione?\n"
-                f"4. **Output Specifico:** Leggi l'ultimo output di Claude per capire cosa è stato fatto\n"
+                f"**PIANO:** {plan_summary}\n\n"
+                f"**STORIA RECENTE:** {history_summary}\n\n"
+                f"**DIRECTORY:** {self.working_directory}\n"
             )
             
             if user_feedback and user_feedback.strip():
@@ -1528,57 +1760,35 @@ ISTRUZIONI BATCH:
             except Exception:
                 dev_prompt_context += f"**STATO DIRECTORY:** Impossibile leggere contenuto directory\n\n"
 
-            # ISTRUZIONI SPECIFICHE PER ARCHITETTO TDD CON DECISION TREE
-            dev_prompt_instruction = (
-                "ANALIZZA L'ULTIMO OUTPUT DI CLAUDE E DECIDI IL PROSSIMO PASSO CON QUESTA LOGICA PRECISA:\n\n"
-                
-                "**DECISION TREE - LEGGI E SEGUI ESATTAMENTE:**\n"
-                "1️⃣ **SE DIRECTORY VUOTA:** → Setup iniziale appropriato per il framework scelto (package.json per JS, requirements.txt per Python, etc.)\n"
-                "2️⃣ **SE CI SONO FILE ESISTENTI:** → PRIMA analizza il contenuto e confronta con PRP. Se non corrispondono ai requisiti attuali, avvisa l'utente del conflitto\n"
-                "3️⃣ **SE FILE ESISTENTI SEMBRANO INCOMPLETI/DIVERSI:** → Chiedi conferma prima di modificare, poi implementa mancanti\n"
-                "4️⃣ **SE SETUP FATTO MA NO TESTING FRAMEWORK:** → Installa framework test appropriato\n"
-                "5️⃣ **SE FRAMEWORK TEST OK MA NO TEST FILES:** → RED PHASE (crea primo test che fallisce)\n"
-                "6️⃣ **SE TEST FALLISCONO (ERROR/FAILED):** → GREEN PHASE (implementa per far passare)\n"
-                "7️⃣ **SE TEST PASSANO (PASSED/SUCCESS):** → Prossimo RED PHASE (test per nuova feature)\n"
-                "8️⃣ **SE ERRORI DI COMPILAZIONE/IMPORT:** → Fix errori prima di continuare\n"
-                "9️⃣ **SE CODICE FUNZIONA MA NON PULITO:** → REFACTOR PHASE (migliora qualità)\n\n"
-                
-                "**COMANDI SPECIFICI PER FASE:**\n"
-                "• **Setup JS/Web:** `npm init -y` per Node.js, o direttamente HTML/CSS/JS per web vanilla\n"
-                "• **Setup Python:** `touch requirements.txt` o `pip freeze > requirements.txt`\n"
-                "• **Setup Other:** Adatta al framework del PRP (cargo init, composer init, etc.)\n"
-                "• **Test Framework:** Scegli appropriato (jest per JS, pytest per Python, etc.)\n"
-                "• **Run Test:** `npm test` o `python -m pytest` o `jest` o `pytest -v`\n"
-                "• **Create Files:** Usa prompt high-level per implementazioni\n\n"
-                
-                "**ESEMPI DECISION MAKING:**\n"
-                "❌ **SBAGLIATO:** 'Prima iterazione TDD - Setup progetto'\n"
-                "✅ **CORRETTO:** 'npm install --save-dev jest' (se manca framework)\n"
-                "✅ **CORRETTO:** 'pytest -v' (se devi vedere status test)\n"
-                "✅ **CORRETTO:** 'Crea test/todo.test.js che testa addTodo() function - deve fallire inizialmente'\n\n"
-                
-                "**REGOLE FERREE:**\n"
-                "1. NON ripetere lo stesso comando/decisione dell'iterazione precedente\n"
-                "2. LEGGI attentamente l'ultimo output di Claude per capire cosa è successo\n"
-                "3. SE vedi test FAILED → implementa codice per farli passare\n"
-                "4. SE vedi test PASSED → crea nuovo test per prossima feature\n"
-                "5. SE vedi errori → risolvili prima di continuare con TDD\n"
-                "6. **CRITICAL:** NON creare sottocartelle con il nome del progetto. La directory corrente è già la root.\n"
-                "7. **CRITICAL:** Tutti i file vanno nella directory corrente o in sottocartelle logiche (src/, tests/, etc.)\n"
-                "8. **SAFETY FIRST:** NEVER delete or overwrite files without explicit user permission when directory contains existing work\n"
-                "9. **CRITICAL ANTI-LOOP:** NEVER say 'progetto già completo' when files exist. ALWAYS analyze content vs current PRP requirements\n"
-                "10. **CONFLICT RESOLUTION:** If files exist but don't match PRP, inform user of conflict and ask for guidance\n\n"
-                
-                "**FORMATO OUTPUT:** \n"
-                "Rispondi SOLO con:\n"
-                "- Un comando shell (es: `npm test`)\n"
-                "- O un prompt specifico per Claude (es: 'Implementa la funzione addTodo in src/todo.js')\n"
-                
-                "NO spiegazioni, NO 'Prima iterazione', NO ripetizioni. SOLO IL PROSSIMO PASSO CONCRETO."
+            # ISTRUZIONI SPECIFICHE CON DECISION TREE ADATTIVO (OTTIMIZZATO)
+            completion_instruction = (
+                "IMPORTANTE: Quando il task è completato, aggiungi ESATTAMENTE questa keyword: [PROMETHEUS_COMPLETE]\n"
+                "Questa keyword ferma automaticamente il ciclo di sviluppo.\n\n"
             )
+            
+            if is_simple_static and not self.tdd_mode:
+                dev_prompt_instruction = (
+                    completion_instruction +
+                    "STATICO: Directory vuota→crea HTML/CSS/JS. File esistenti→completa. Modifica fatta→aggiungi [PROMETHEUS_COMPLETE].\n"
+                    "NO npm, NO server, NO test framework. Output: comando diretto o testo + [PROMETHEUS_COMPLETE].\n"
+                )
+            else:
+                dev_prompt_instruction = (
+                    completion_instruction +
+                    "LOGICA:\n"
+                    "1. Vuota→setup framework\n"
+                    "2. File esistenti→analizza vs piano\n" 
+                    "3. TDD: test falliti→implementa, test passano→nuovo test\n"
+                    "4. Errori→fix first\n"
+                    "5. Progetto completo→aggiungi [PROMETHEUS_COMPLETE]\n\n"
+                    "Output: comando shell o prompt Claude specifico. NO spiegazioni.\n"
+                )
             
             full_dev_prompt = dev_prompt_context + dev_prompt_instruction
 
+            # Comunica l'inizio dell'iterazione (specialmente importante per la prima)
+            yield "⚡ **Comando in esecuzione**\n\n"
+            
             yield "[THINKING]" # Segnale pulito per l'animazione
             
             # Ottieni il prossimo comando/prompt dall'architetto selezionato
@@ -1588,12 +1798,28 @@ ISTRUZIONI BATCH:
             
             yield f"[CLAUDE_PROMPT]{gemini_prompt_for_claude}" # Segnale con il prompt
             
+            # LOG: Prometheus sending command to Claude CLI
+            start_claude_time = time.time()
+            log_prompt_interaction(
+                phase="DEVELOPMENT",
+                source="PROMETHEUS",
+                target="CLAUDE_CLI", 
+                prompt_text=gemini_prompt_for_claude,
+                response_text="",
+                timing_ms=0
+            )
+            
             # Esecuzione con Popen
             command_list = ["claude", "-p", "--dangerously-skip-permissions", gemini_prompt_for_claude]
             
-            # DEBUG: Log directory usage for Popen
-            debug_logger.info(f"subprocess.Popen about to run with cwd: {self.working_directory}")
-            debug_logger.info(f"Current working directory before Popen: {os.getcwd()}")
+            # ENHANCED DEBUG: Log full execution context
+            debug_logger.info(f"=== CLAUDE CLI EXECUTION DEBUG ===")
+            debug_logger.info(f"Command: {' '.join(command_list)}")
+            debug_logger.info(f"Working directory: {self.working_directory}")
+            debug_logger.info(f"Current working directory: {os.getcwd()}")
+            debug_logger.info(f"Prompt length: {len(gemini_prompt_for_claude)} chars")
+            debug_logger.info(f"Files in working directory: {os.listdir(self.working_directory) if os.path.exists(self.working_directory) else 'DIR_NOT_EXISTS'}")
+            debug_logger.info(f"=====================================")
             
             process = subprocess.Popen(
                 command_list,
@@ -1605,6 +1831,10 @@ ISTRUZIONI BATCH:
             )
             
             debug_logger.info(f"subprocess.Popen started with pid: {process.pid}")
+            
+            # Track if we got any meaningful output
+            has_stdout_output = False
+            has_stderr_output = False
 
             yield "[CLAUDE_WORKING]" # Segnale di inizio lavoro per Claude
 
@@ -1618,11 +1848,15 @@ ISTRUZIONI BATCH:
                     if fd == process.stdout.fileno():
                         line = process.stdout.readline()
                         if line:
+                            has_stdout_output = True
+                            debug_logger.info(f"STDOUT: {line.strip()}")
                             yield line
                             full_claude_output += line
                     if fd == process.stderr.fileno():
                         line = process.stderr.readline()
                         if line:
+                            has_stderr_output = True
+                            debug_logger.error(f"STDERR: {line.strip()}")
                             stderr_line = f"[STDERR]: {line}"
                             yield stderr_line
                             full_claude_output += stderr_line
@@ -1635,19 +1869,58 @@ ISTRUZIONI BATCH:
             # Leggi output rimanente
             stdout, stderr = process.communicate()
             if stdout:
+                has_stdout_output = True
+                debug_logger.info(f"FINAL STDOUT: {stdout.strip()}")
                 yield stdout
                 full_claude_output += stdout
             if stderr:
+                has_stderr_output = True
+                debug_logger.error(f"FINAL STDERR: {stderr.strip()}")
                 stderr_final = f"[STDERR]: {stderr}"
                 yield stderr_final
                 full_claude_output += stderr_final
 
+            # Get process exit code
+            exit_code = process.returncode
+            debug_logger.info(f"Claude CLI process exit code: {exit_code}")
+            
+            # ENHANCED ERROR DETECTION
+            if exit_code != 0 or not has_stdout_output or "error" in full_claude_output.lower():
+                error_details = []
+                if exit_code != 0:
+                    error_details.append(f"Exit code: {exit_code}")
+                if has_stderr_output:
+                    error_details.append("Stderr output present")
+                if not has_stdout_output:
+                    error_details.append("No stdout output")
+                
+                debug_logger.error(f"Claude CLI FAILED: {'; '.join(error_details)}")
+                
+                # Instead of generic "Execution error", provide specific details
+                if has_stderr_output and stderr:
+                    yield f"\n\n**ERRORE SPECIFICO CLAUDE CLI:** {stderr.strip()}"
+                elif exit_code != 0:
+                    yield f"\n\n**ERRORE CLAUDE CLI:** Processo terminato con codice {exit_code}. Comando: {' '.join(command_list[:3])}..."
+                else:
+                    yield f"\n\n**ERRORE CLAUDE CLI:** Nessun output ricevuto. Verificare installazione e permessi."
+            
             # Segnala completamento del ciclo
             if self.lang == 'it':
                 yield "\n\n[CYCLE_COMPLETE]🔄 **Passo completato.** Il ciclo continua autonomamente..."
             else:
                 yield "\n\n[CYCLE_COMPLETE]🔄 **Step completed.** The cycle continues autonomously..."
 
+            # LOG: Response from Claude CLI
+            claude_elapsed_ms = int((time.time() - start_claude_time) * 1000)
+            log_prompt_interaction(
+                phase="DEVELOPMENT",
+                source="CLAUDE_CLI",
+                target="PROMETHEUS",
+                prompt_text="",
+                response_text=full_claude_output,
+                timing_ms=claude_elapsed_ms
+            )
+            
             self.conversation_history.append(f"[Claude (Output)]: {full_claude_output}")
             self.save_state(verbose=False)  # Salvataggio silenzioso durante sviluppo automatico
             
