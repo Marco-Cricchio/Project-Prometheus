@@ -316,12 +316,29 @@ def rename_conversation():
 
     try:
         os.rename(old_path, new_path)
+        print(f"DEBUG rename: old_id={old_id}, new_id={new_id}")
+        print(f"DEBUG rename: orchestrator_instances keys before: {list(orchestrator_instances.keys())}")
+        print(f"DEBUG rename: old_id in orchestrator_instances: {old_id in orchestrator_instances}")
+        
         if old_id in orchestrator_instances:
             instance = orchestrator_instances.pop(old_id)
             instance.session_id = new_id
             instance.save_state()
             orchestrator_instances[new_id] = instance
+            print(f"DEBUG rename: moved orchestrator from {old_id} to {new_id}")
+        else:
+            print(f"DEBUG rename: orchestrator for {old_id} not found in cache, loading it...")
+            # Carica l'orchestrator dal file e aggiornalo con il nuovo ID
+            try:
+                instance = Orchestrator(session_id=old_id, lang='it')  # Carica dal file
+                instance.session_id = new_id
+                instance.save_state()
+                orchestrator_instances[new_id] = instance
+                print(f"DEBUG rename: loaded and moved orchestrator from {old_id} to {new_id}")
+            except Exception as e:
+                print(f"DEBUG rename: failed to load orchestrator: {e}")
         
+        print(f"DEBUG rename: orchestrator_instances keys after: {list(orchestrator_instances.keys())}")
         return jsonify({"success": True, "new_id": new_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
